@@ -1,0 +1,22 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+build/
+*.egg
+
+# Rust
+target/
+
+# Test data (synced to spider-browser-dataset)
+stealth-*.csv
+stealth-*.json
+automation-showcase*.csv
+.claude/

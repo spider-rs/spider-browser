@@ -1,0 +1,2 @@
+scenario,domain,category,goal,actions_used,status,session_id,extracted_data,time_ms,content_length,browser,stealth_level,credits_used,error
+ai-extract-hn,news.ycombinator.com,AI Extract,LLM extracts structured data from HN with schema,"goto, extract",partial,9e5ee789-5a6b-427a-9ca0-c6b194905eda,,17886,34480,chrome-h,0,0,"OpenAI API error 404: {""error"":{""message"":""No endpoints found that support image input"",""code"":404}}"

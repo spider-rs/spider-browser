@@ -1,0 +1,63 @@
+scenario,domain,category,goal,actions_used,status,session_id,extracted_data,time_ms,content_length,browser,stealth_level,credits_used,error
+hn-top-stories,news.ycombinator.com,Data Extraction,Extract top 10 HN stories with scores,"goto, evaluate",pass,6a18364a-bbff-4a9e-a300-07c53a905d93,1. Internet Increasingly Becoming Unarchivable (129 points) | 2. uBlock filter list to hide all YouTube Shorts (105 points) | 3. Gemini 3 Deep Think drew me a good SVG of a pelican riding a bicycle (18 points) | 4. My smart sleep mask broadcasts users' brainwaves to an open MQTT broker (219 points) ,17040,34471,chrome-h,0,3.3074,
+wiki-search-rust,wikipedia.org,Search & Extract,"Search ""Rust programming"" and extract article data","goto, click, type, press, scrollY, evaluate",pass,b10f51bc-6e66-48fa-bff0-eb4097efe2be,Main Page,21835,425999,chrome-h,0,68.4998,
+github-repo-explore,github.com,Navigation,"Navigate to spider-rs/spider, scroll README, extract headings","goto, scrollY, evaluate",pass,6150f35f-890a-48b6-b357-dabf17642c36,"Web crawler and scraper for Rust | README sections: Spider, Features, Core, Browser Automation, Data Processing, Security & Control, AI Agent, Quick Start",24370,436652,chrome-h,0,61.0889,
+reddit-programming,old.reddit.com,Data Extraction,Extract top posts from r/programming,"goto, scrollY, evaluate",partial,2431cb60-35a0-48c2-a2b8-70bddce5a52a,,17919,1506,chrome-h,0,0,No posts extracted
+form-fill-httpbin,httpbin.org,Form Automation,Fill multi-field form field-by-field with visible typing,"goto, click, type, press, evaluate",pass,e471e5fb-e1d1-4e16-b221-44b63ed7696e,"Filled: name=Spider Showcase User, size=medium, toppings=cheese+onion+mushroom",21129,1404,chrome-h,0,1.4836,
+nyt-headlines,nytimes.com,Stealth,"Bypass bot protection, extract headlines","goto, content, evaluate",pass,fb80c436-b034-45f0-a318-7a669403d482,"We and our partners process data for the following purposes | Search for Nancy Guthrie | Munich Security Conference | Navalny Was Poisoned With Frog Toxin, European Governments Say | In Munich, Rubio Calls Europe a Friend but Says It Must Change",23527,1174275,chrome-h,0,245.4877,
+stripe-pricing,stripe.com,Content Unlock,"Load pricing page, progressively scroll to reveal all plan tiers","goto, scrollY, evaluate, content",pass,d9fa71f2-8731-411f-af92-476599077bac,"Pricing & Fees | Sections: 1.5% + €0.25, 2.5% + €0.25, Standard pricing for all products, Navigate to:, Custom pricing, Report | 722423 chars",21545,883995,chrome-h,0,40.6528,
+wiki-multi-page,wikipedia.org,Multi-page,Rust -> Mozilla -> back -> forward — collect titles,"goto, evaluate, goBack, goForward",pass,6b4a1325-68ba-4897-890f-033304fdb75f,Pages visited: Rust (programming language) -> Mozilla -> Rust (programming language) -> Mozilla,52501,0,chrome-h,0,1020.4218,
+github-explore-org,github.com,Navigation,"Browse spider-rs org, explore repos, check stars and activity","goto, scrollY, click, evaluate",pass,6e4e8d0b-b601-4deb-a40f-9be8bb3ff40b,"Search code, repositories, users, issues, pull requests...:  | Pinned: spider: Web crawler and scraper for Rust, spider-py: Spider ported to Python, headless-browser: Headless browser - reliable high perform, spider-nodejs: Spider ported to Node.js | Now at: GitHub",22451,437638,chrome-h,0,35.5087,
+mdn-docs-browse,developer.mozilla.org,Documentation,"Search MDN for Fetch API, navigate to docs, scroll through reference","goto, click, type, press, scrollY, evaluate",pass,34c96d58-5090-4243-a72b-1a00b63e8c61,"Fetch API: content available | Sections: In this article, Concepts and usage, Interfaces, HTTP headers, Specifications",22450,66642,chrome-h,0,9.142,
+imdb-movie-data,imdb.com,Data Extraction,Extract top 250 movies (first 10) with ratings,"goto, evaluate",pass,b023d32f-709d-438b-a8c3-d4d97363bcbb,#1 The Shawshank Redemption (9.3) | #2 The Godfather (9.2) | #3 The Dark Knight (9.1) | #4 The Godfather Part II (9.0) | #5 12 Angry Men (9.0) | #6 The Lord of the Rings: The Return of the King (9.0) | #7 Schindler's List (9.0) | #8 The Lord of the Rings: The Fellowship of the Ring (8.9) | #9 Pulp F,23056,3377562,chrome-h,0,237.1503,
+keyboard-tab-nav,httpbin.org,Interaction,"Navigate form entirely with keyboard: Tab, type, Space for radios","click, type, press, evaluate",pass,f3d1c0be-5e03-4131-be28-18ed13bb590c,"Keyboard-only: name=Keyboard Navigator, tel=555-TAB1, toppings=bacon+onion+mushroom",22344,1404,chrome-h,0,0.8389,
+infinite-scroll-hn,news.ycombinator.com,Scroll,Scroll 5x to measure content growth,"goto, scrollY, evaluate",pass,bbc804b5-f048-4f87-a52a-dc74fe1de8e5,"Stories: 30 -> 30 | Heights: 1178,1178,1178,1178,1178 | Body: 34097 chars",20081,34471,chrome-h,0,4.1839,
+product-hunt-today,producthunt.com,Stealth + Extract,"Load today's products, scroll to reveal, extract names + votes","goto, scrollY, evaluate",pass,168a4071-7900-4e6e-817d-543c24c3bedf,Product Hunt loaded: Just a moment... (7904 chars),21312,28751,chrome-h,0,38.9209,
+ai-extract-hn,news.ycombinator.com,AI Extract,LLM extracts structured data from HN with schema,"goto, extract",partial,d8546009-504f-4023-aab4-0aff5debdc4e,,21083,34471,chrome-h,0,0,"[
+  {
+    ""code"": ""invalid_type"",
+    ""expected"": ""object"",
+    ""received"": ""array"",
+    ""path"": [],
+    ""message"": ""Expected object, received array""
+  }
+]"
+ai-extract-weather,weather.gov,AI Extract,LLM extracts current weather forecast for NYC,"goto, scrollY, extract",partial,9f787643-1f48-435f-aa85-58b518d322da,,21805,55186,chrome-h,0,0,"[
+  {
+    ""code"": ""invalid_type"",
+    ""expected"": ""string"",
+    ""received"": ""undefined"",
+    ""path"": [
+      ""location""
+    ],
+    ""message"": ""Required""
+  },
+  {
+    ""code"": ""invalid_type"",
+    ""expec"
+ai-extract-github-profile,github.com,AI Extract,"LLM extracts user profile data (bio, repos, followers)","goto, extract",partial,63795b68-2706-4469-8431-cbd1119d8ebb,,21494,293610,chrome-h,0,0,"[
+  {
+    ""code"": ""invalid_type"",
+    ""expected"": ""string"",
+    ""received"": ""undefined"",
+    ""path"": [
+      ""name""
+    ],
+    ""message"": ""Required""
+  }
+]"
+ai-navigate-wiki,wikipedia.org,AI Agent,"Agent searches Wikipedia, reads article, clicks a link to explore further",agent.execute,fail,2294fd1f-3e2d-4956-a72f-60b5a8666683,,106041,0,chrome-h,0,0,WebSocket is not connected
+ai-fill-form,httpbin.org,AI Agent,Agent fills a form autonomously,agent.execute,pass,72df3591-8b33-4f0a-8737-800d9a558cef,"Done in 2 rounds | name=AI Agent, tel=555-0000, email=ai@spider.cloud",28456,1404,chrome-h,0,1.7979,
+ai-extract-recipe,allrecipes.com,AI Extract,LLM extracts full recipe with ingredients and cooking steps,"goto, scrollY, extract",partial,d1acae81-116c-4a25-830f-0c6f6f331af9,,25642,1311316,chrome-h,0,0,"[
+  {
+    ""code"": ""invalid_type"",
+    ""expected"": ""string"",
+    ""received"": ""undefined"",
+    ""path"": [
+      ""title""
+    ],
+    ""message"": ""Required""
+  },
+  {
+    ""code"": ""invalid_type"",
+    ""expected"
