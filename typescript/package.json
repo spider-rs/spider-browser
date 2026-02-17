@@ -1,6 +1,6 @@
 {
   "name": "spider-browser",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Browser automation client for Spider's pre-warmed browser fleet with smart retry and browser switching",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -44,5 +44,29 @@
   "engines": {
     "node": ">=18"
   },
+  "keywords": [
+    "browser",
+    "automation",
+    "scraping",
+    "web-scraping",
+    "headless",
+    "cdp",
+    "chrome-devtools-protocol",
+    "webdriver-bidi",
+    "stealth",
+    "spider",
+    "cloud-browser",
+    "puppeteer",
+    "playwright",
+    "retry",
+    "anti-bot"
+  ],
+  "author": "Spider <maintainers@spider.cloud> (https://spider.cloud)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/spider-rs/spider-browser.git",
+    "directory": "typescript"
+  },
+  "homepage": "https://spider.cloud",
   "license": "MIT"
 }

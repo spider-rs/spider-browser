@@ -4,10 +4,45 @@ build-backend = "hatchling.build"
 
 [project]
 name = "spider-browser"
-version = "0.2.0"
+version = "0.2.1"
 description = "Browser automation client for Spider's pre-warmed browser fleet with smart retry and browser switching"
 requires-python = ">=3.10"
 license = "MIT"
+authors = [
+    { name = "Spider", email = "maintainers@spider.cloud" },
+]
+keywords = [
+    "browser",
+    "automation",
+    "scraping",
+    "web-scraping",
+    "headless",
+    "cdp",
+    "chrome-devtools-protocol",
+    "webdriver-bidi",
+    "stealth",
+    "spider",
+    "cloud-browser",
+    "puppeteer",
+    "playwright",
+    "retry",
+    "anti-bot",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP :: Browsers",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Testing",
+    "Framework :: AsyncIO",
+    "Typing :: Typed",
+]
 dependencies = [
     "websockets>=12.0",
     "pydantic>=2.0",
@@ -19,6 +54,12 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
 ]
+
+[project.urls]
+Homepage = "https://spider.cloud"
+Repository = "https://github.com/spider-rs/spider-browser"
+Documentation = "https://spider.cloud/docs"
+Issues = "https://github.com/spider-rs/spider-browser/issues"
 
 [tool.hatch.build.targets.sdist]
 include = ["spider_browser/", "LICENSE"]

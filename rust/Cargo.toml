@@ -1,11 +1,14 @@
 [package]
 name = "spider-browser"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "Browser automation client for Spider's pre-warmed browser fleet with smart retry and browser switching"
 license = "MIT"
+authors = ["Spider <maintainers@spider.cloud>"]
 repository = "https://github.com/spider-rs/spider-browser"
-keywords = ["browser", "automation", "scraping", "stealth", "spider"]
+homepage = "https://spider.cloud"
+documentation = "https://docs.rs/spider-browser"
+keywords = ["browser", "automation", "scraping", "stealth", "headless"]
 categories = ["web-programming", "api-bindings"]
 
 [dependencies]
