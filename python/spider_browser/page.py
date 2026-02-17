@@ -554,6 +554,54 @@ class SpiderPage:
         )
         return result if isinstance(result, str) else None
 
+    async def extract_fields(
+        self,
+        fields: Dict[str, Any],
+    ) -> Dict[str, Optional[str]]:
+        """Extract multiple fields from the page in a single call.
+
+        Each key maps to a CSS selector string (returns trimmed textContent)
+        or a dict ``{"selector": "...", "attribute": "..."}`` (returns the
+        attribute value).
+
+        Example::
+
+            data = await page.extract_fields({
+                "title": "#productTitle",
+                "price": ".a-price .a-offscreen",
+                "rating": "#acrPopover .a-icon-alt",
+                "image": {"selector": "#main-image", "attribute": "src"},
+            })
+        """
+        field_map = []
+        for key, val in fields.items():
+            if isinstance(val, str):
+                field_map.append({"key": key, "selector": val, "attribute": None})
+            else:
+                field_map.append({
+                    "key": key,
+                    "selector": val["selector"],
+                    "attribute": val["attribute"],
+                })
+
+        result = await self._adapter.evaluate(f"""
+            (() => {{
+                const fields = {json.dumps(field_map)};
+                const result = {{}};
+                for (const f of fields) {{
+                    const el = document.querySelector(f.selector);
+                    result[f.key] = el
+                        ? (f.attribute ? el.getAttribute(f.attribute) : el.textContent?.trim()) ?? null
+                        : null;
+                }}
+                return JSON.stringify(result);
+            }})()
+        """)
+
+        if isinstance(result, str):
+            return json.loads(result)
+        return {}
+
     # -------------------------------------------------------------------
     # Internals
     # -------------------------------------------------------------------

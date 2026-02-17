@@ -16,5 +16,5 @@ pub mod ai;
 
 pub use errors::{Result, SpiderError};
 pub use events::SpiderEventEmitter;
-pub use page::SpiderPage;
+pub use page::{FieldSelector, SpiderPage};
 pub use spider_browser::{SpiderBrowser, SpiderBrowserOptions};

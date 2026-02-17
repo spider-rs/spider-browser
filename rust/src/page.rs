@@ -22,6 +22,33 @@ pub struct SpiderPage {
     adapter: ArcSwap<ProtocolAdapter>,
 }
 
+/// Selector specification for [`SpiderPage::extract_fields`].
+///
+/// Use [`From<&str>`] for the common text-content case:
+/// ```ignore
+/// page.extract_fields(&[
+///     ("title", "#productTitle".into()),
+///     ("image", FieldSelector::Attr { selector: "#img", attribute: "src" }),
+/// ]).await?;
+/// ```
+#[derive(Debug, Clone)]
+pub enum FieldSelector<'a> {
+    /// Extract `textContent` (trimmed) from the element matching this CSS
+    /// selector.
+    Text(&'a str),
+    /// Extract an attribute value from the element matching the CSS selector.
+    Attr {
+        selector: &'a str,
+        attribute: &'a str,
+    },
+}
+
+impl<'a> From<&'a str> for FieldSelector<'a> {
+    fn from(s: &'a str) -> Self {
+        Self::Text(s)
+    }
+}
+
 impl SpiderPage {
     // -----------------------------------------------------------------
     // Construction
@@ -887,6 +914,76 @@ impl SpiderPage {
         } else {
             Ok(val.as_str().map(|s| s.to_string()))
         }
+    }
+
+    /// Extract multiple fields from the page in a single evaluate call.
+    ///
+    /// Each entry maps a key name to a [`FieldSelector`]. Returns a map of
+    /// key → value (or `None` if the element was not found).
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use std::collections::HashMap;
+    /// use spider_browser::page::FieldSelector;
+    ///
+    /// let data = page.extract_fields(&[
+    ///     ("title", "#productTitle".into()),
+    ///     ("price", ".a-price .a-offscreen".into()),
+    ///     ("image", FieldSelector::Attr {
+    ///         selector: "#main-image",
+    ///         attribute: "src",
+    ///     }),
+    /// ]).await?;
+    /// println!("{:?}", data.get("title"));
+    /// ```
+    pub async fn extract_fields(
+        &self,
+        fields: &[(&str, FieldSelector<'_>)],
+    ) -> Result<std::collections::HashMap<String, Option<String>>> {
+        // Build the field map as a JSON array for the browser JS.
+        let field_map: Vec<Value> = fields
+            .iter()
+            .map(|(key, sel)| {
+                let (css, attr) = match sel {
+                    FieldSelector::Text(s) => (*s, None),
+                    FieldSelector::Attr {
+                        selector,
+                        attribute,
+                    } => (*selector, Some(*attribute)),
+                };
+                serde_json::json!({
+                    "key": key,
+                    "selector": css,
+                    "attribute": attr,
+                })
+            })
+            .collect();
+
+        let field_json = serde_json::to_string(&field_map)
+            .unwrap_or_else(|_| "[]".to_string());
+
+        let js = format!(
+            r#"
+            (() => {{
+                const fields = {field_json};
+                const result = {{}};
+                for (const f of fields) {{
+                    const el = document.querySelector(f.selector);
+                    result[f.key] = el
+                        ? (f.attribute ? el.getAttribute(f.attribute) : el.textContent?.trim()) ?? null
+                        : null;
+                }}
+                return JSON.stringify(result);
+            }})()
+            "#
+        );
+
+        let val = self.adapter().evaluate(&js).await?;
+        let raw = val.as_str().unwrap_or("{}");
+        let parsed: std::collections::HashMap<String, Option<String>> =
+            serde_json::from_str(raw).unwrap_or_default();
+        Ok(parsed)
     }
 
     // =================================================================

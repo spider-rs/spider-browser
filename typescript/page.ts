@@ -686,6 +686,49 @@ export class SpiderPage {
     )) as string | null;
   }
 
+  /**
+   * Extract multiple fields from the page in a single call.
+   *
+   * Each key maps to a CSS selector (returns trimmed textContent) or
+   * an object `{ selector, attribute }` (returns the attribute value).
+   *
+   * @example
+   * ```ts
+   * const data = await page.extractFields({
+   *   title: "#productTitle",
+   *   price: ".a-price .a-offscreen",
+   *   rating: "#acrPopover .a-icon-alt",
+   *   image: { selector: "#main-image", attribute: "src" },
+   * });
+   * // { title: "MacBook Pro", price: "$2,499", rating: "4.7 out of 5", image: "https://..." }
+   * ```
+   */
+  async extractFields(
+    fields: Record<string, string | { selector: string; attribute: string }>,
+  ): Promise<Record<string, string | null>> {
+    const fieldMap = Object.entries(fields).map(([key, val]) => ({
+      key,
+      selector: typeof val === 'string' ? val : val.selector,
+      attribute: typeof val === 'string' ? null : val.attribute,
+    }));
+
+    const result = await this.adapter.evaluate(`
+      (() => {
+        const fields = ${JSON.stringify(fieldMap)};
+        const result = {};
+        for (const f of fields) {
+          const el = document.querySelector(f.selector);
+          result[f.key] = el
+            ? (f.attribute ? el.getAttribute(f.attribute) : el.textContent?.trim()) ?? null
+            : null;
+        }
+        return JSON.stringify(result);
+      })()
+    `);
+
+    return typeof result === 'string' ? JSON.parse(result) : {};
+  }
+
   // -------------------------------------------------------------------
   // Internals
   // -------------------------------------------------------------------

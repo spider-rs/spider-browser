@@ -107,13 +107,36 @@ await page.evaluate('document.querySelector("input").value = "hello"');
 await page.evaluate('document.querySelector(".footer").scrollIntoView()');
 ```
 
-### OK: page.evaluate() for complex extraction
+### Best: page.extractFields() for structured data
 
-`evaluate()` is the right tool when you need to run complex multi-element logic
-that returns structured data — things the built-in methods don't cover:
+For extracting multiple fields from a single page, use `extractFields()` —
+it runs a single optimized evaluate call and returns a typed object:
 
 ```ts
-// OK — complex multi-element extraction into structured JSON
+// Extract text content by CSS selector
+const data = await page.extractFields({
+  title: "#productTitle",
+  price: ".a-price .a-offscreen",
+  rating: "#acrPopover .a-icon-alt",
+  availability: "#availability span",
+});
+// { title: "MacBook Pro", price: "$2,499", rating: "4.7 out of 5", availability: "In Stock" }
+
+// Extract attributes with { selector, attribute }
+const links = await page.extractFields({
+  image: { selector: "#main-image", attribute: "src" },
+  canonical: { selector: "link[rel='canonical']", attribute: "href" },
+  ogTitle: { selector: "meta[property='og:title']", attribute: "content" },
+});
+```
+
+### OK: page.evaluate() for list extraction
+
+`evaluate()` is still the right tool for iterating over multiple matching
+elements (querySelectorAll loops) that `extractFields` doesn't cover:
+
+```ts
+// OK — iterating over a list of elements
 const data = await page.evaluate(`(() => {
   const items = [];
   document.querySelectorAll(".product").forEach(el => {
