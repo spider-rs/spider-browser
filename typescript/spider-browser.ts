@@ -74,7 +74,7 @@ export interface SpiderBrowserOptions {
 export class SpiderBrowser {
   private opts: Required<
     Pick<SpiderBrowserOptions, 'apiKey' | 'serverUrl' | 'browser' | 'captcha' | 'smartRetry' | 'maxRetries' | 'stealth' | 'maxStealthLevels' | 'connectTimeoutMs' | 'commandTimeoutMs' | 'retryTimeoutMs'>
-  > & Pick<SpiderBrowserOptions, 'url' | 'llm' | 'hedge' | 'record' | 'mode'>;
+  > & Pick<SpiderBrowserOptions, 'url' | 'llm' | 'hedge' | 'record' | 'mode' | 'country'>;
   private transport: Transport | null = null;
   private adapter: ProtocolAdapter | null = null;
   private retryEngine: RetryEngine | null = null;
@@ -101,6 +101,7 @@ export class SpiderBrowser {
       hedge: options.hedge,
       record: options.record,
       mode: options.mode,
+      country: options.country,
     };
 
     if (options.logLevel) {
