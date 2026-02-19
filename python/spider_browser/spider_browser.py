@@ -41,6 +41,8 @@ class SpiderBrowserOptions:
     hedge: bool = False
     record: bool = False
     mode: Optional[str] = None  # 'scraping' or 'cua'
+    country: Optional[str] = None
+    proxy_url: Optional[str] = None
     llm: Optional[LLMConfig] = None
 
 
@@ -149,6 +151,8 @@ class SpiderBrowser:
             record=self._opts.record,
             mode=self._opts.mode,
             hedge=self._opts.hedge,
+            country=self._opts.country,
+            proxy_url=self._opts.proxy_url,
             connect_timeout_ms=self._opts.connect_timeout_ms,
             command_timeout_ms=self._opts.command_timeout_ms,
             emitter=self._emitter,

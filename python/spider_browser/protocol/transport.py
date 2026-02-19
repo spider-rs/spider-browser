@@ -36,6 +36,8 @@ class Transport:
         record: bool = False,
         mode: Optional[str] = None,
         hedge: bool = False,
+        country: Optional[str] = None,
+        proxy_url: Optional[str] = None,
         connect_timeout_ms: int = 30_000,
         command_timeout_ms: int = 30_000,
         emitter: SpiderEventEmitter,
@@ -49,6 +51,8 @@ class Transport:
         self._record = record
         self._mode = mode
         self._hedge = hedge
+        self._country = country
+        self._proxy_url = proxy_url
         self._connect_timeout_ms = connect_timeout_ms
         self._command_timeout_ms = command_timeout_ms
         self._emitter = emitter
@@ -211,6 +215,10 @@ class Transport:
             params["record"] = "true"
         if self._mode:
             params["mode"] = self._mode
+        if self._country:
+            params["country"] = self._country
+        if self._proxy_url:
+            params["proxy_url"] = self._proxy_url
         return f"{self._server_url}/v1/browser?{urlencode(params)}"
 
     async def _connect_internal(self) -> None:

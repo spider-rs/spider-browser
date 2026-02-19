@@ -28,6 +28,8 @@ pub struct TransportOptions {
     pub hedge: bool,
     pub record: bool,
     pub mode: Option<String>,
+    pub country: Option<String>,
+    pub proxy_url: Option<String>,
 }
 
 impl Default for TransportOptions {
@@ -44,6 +46,8 @@ impl Default for TransportOptions {
             hedge: false,
             record: false,
             mode: None,
+            country: None,
+            proxy_url: None,
         }
     }
 }
@@ -228,6 +232,12 @@ impl Transport {
         }
         if let Some(ref mode) = self.opts.mode {
             params.push(format!("mode={mode}"));
+        }
+        if let Some(ref country) = self.opts.country {
+            params.push(format!("country={country}"));
+        }
+        if let Some(ref proxy_url) = self.opts.proxy_url {
+            params.push(format!("proxy_url={}", urlencoding::encode(proxy_url)));
         }
         format!("{base}/v1/browser?{}", params.join("&"))
     }

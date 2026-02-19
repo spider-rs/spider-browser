@@ -46,6 +46,10 @@ pub struct SpiderBrowserOptions {
     pub record: Option<bool>,
     /// Browser mode: "scraping" or "cua".
     pub mode: Option<String>,
+    /// Country code for geo-located proxy (e.g. "US", "GB", "DE").
+    pub country: Option<String>,
+    /// Custom proxy URL (e.g. "http://user:pass@proxy:8080"). Overrides server hint-based proxy selection.
+    pub proxy_url: Option<String>,
     /// LLM configuration for AI methods.
     #[cfg(feature = "ai")]
     pub llm: Option<LLMConfig>,
@@ -69,6 +73,8 @@ impl SpiderBrowserOptions {
             hedge: None,
             record: None,
             mode: None,
+            country: None,
+            proxy_url: None,
             #[cfg(feature = "ai")]
             llm: None,
         }
@@ -91,6 +97,8 @@ struct ResolvedOptions {
     hedge: Option<bool>,
     record: Option<bool>,
     mode: Option<String>,
+    country: Option<String>,
+    proxy_url: Option<String>,
 }
 
 /// SpiderBrowser — connects to Spider's pre-warmed browser fleet.
@@ -127,6 +135,8 @@ impl SpiderBrowser {
             hedge: options.hedge,
             record: options.record,
             mode: options.mode.clone(),
+            country: options.country.clone(),
+            proxy_url: options.proxy_url.clone(),
         };
 
         #[cfg(feature = "ai")]
@@ -208,6 +218,8 @@ impl SpiderBrowser {
             hedge: self.opts.hedge.unwrap_or(false),
             record: self.opts.record.unwrap_or(false),
             mode: self.opts.mode.clone(),
+            country: self.opts.country.clone(),
+            proxy_url: self.opts.proxy_url.clone(),
         };
 
         let transport = Transport::new(transport_opts, self.emitter.clone());
