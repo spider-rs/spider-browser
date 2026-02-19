@@ -14,6 +14,8 @@ export interface TransportOptions {
   stealthLevel?: number;
   /** Country code for geo-located proxy (e.g. "US", "GB", "DE"). */
   country?: string;
+  /** Custom proxy URL (e.g. "http://user:pass@proxy:8080"). Overrides server hint-based proxy selection. */
+  proxyUrl?: string;
   /** WebSocket connect timeout in ms (default: 30000). */
   connectTimeoutMs?: number;
   /** CDP/BiDi command timeout in ms (default: 30000). Passed through to sessions. */
@@ -245,6 +247,9 @@ export class Transport {
     }
     if (this.opts.country) {
       params.set('country', this.opts.country);
+    }
+    if (this.opts.proxyUrl) {
+      params.set('proxy_url', this.opts.proxyUrl);
     }
     return `${base}/v1/browser?${params.toString()}`;
   }

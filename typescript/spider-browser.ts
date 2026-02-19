@@ -37,6 +37,8 @@ export interface SpiderBrowserOptions {
   stealth?: number;
   /** Country code for geo-located proxy (e.g. "US", "GB", "DE"). */
   country?: string;
+  /** Custom proxy URL (e.g. "http://user:pass@proxy:8080"). Overrides server hint-based proxy selection. */
+  proxyUrl?: string;
   /** Maximum stealth level to auto-escalate to (1-3, default: 3). */
   maxStealthLevels?: number;
   /** LLM configuration for AI methods (optional). */
@@ -74,7 +76,7 @@ export interface SpiderBrowserOptions {
 export class SpiderBrowser {
   private opts: Required<
     Pick<SpiderBrowserOptions, 'apiKey' | 'serverUrl' | 'browser' | 'captcha' | 'smartRetry' | 'maxRetries' | 'stealth' | 'maxStealthLevels' | 'connectTimeoutMs' | 'commandTimeoutMs' | 'retryTimeoutMs'>
-  > & Pick<SpiderBrowserOptions, 'url' | 'llm' | 'hedge' | 'record' | 'mode' | 'country'>;
+  > & Pick<SpiderBrowserOptions, 'url' | 'llm' | 'hedge' | 'record' | 'mode' | 'country' | 'proxyUrl'>;
   private transport: Transport | null = null;
   private adapter: ProtocolAdapter | null = null;
   private retryEngine: RetryEngine | null = null;
@@ -102,6 +104,7 @@ export class SpiderBrowser {
       record: options.record,
       mode: options.mode,
       country: options.country,
+      proxyUrl: options.proxyUrl,
     };
 
     if (options.logLevel) {
@@ -192,6 +195,7 @@ export class SpiderBrowser {
       record: this.opts.record,
       mode: this.opts.mode,
       country: this.opts.country,
+      proxyUrl: this.opts.proxyUrl,
     };
 
     this.transport = new Transport(transportOpts, this.emitter);
