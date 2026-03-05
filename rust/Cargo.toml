@@ -1,6 +1,6 @@
 [package]
 name = "spider-browser"
-version = "0.2.3"
+version = "0.2.4"
 edition = "2021"
 description = "Browser automation client for Spider's pre-warmed browser fleet with smart retry and browser switching"
 license = "MIT"
