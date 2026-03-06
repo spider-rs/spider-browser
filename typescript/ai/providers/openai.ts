@@ -30,7 +30,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     const body: Record<string, unknown> = {
       model: this.model,
       messages,
-      max_tokens: this.maxTokens,
+      max_completion_tokens: this.maxTokens,
       temperature: this.temperature,
     };
 

@@ -84,7 +84,7 @@ impl LLMProvider for OpenAICompatibleProvider {
         let mut body = json!({
             "model": self.model,
             "messages": Self::format_messages(messages),
-            "max_tokens": self.max_tokens,
+            "max_completion_tokens": self.max_tokens,
             "temperature": self.temperature,
         });
 

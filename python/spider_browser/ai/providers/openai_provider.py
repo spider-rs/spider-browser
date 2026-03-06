@@ -29,7 +29,7 @@ class OpenAICompatibleProvider(LLMProvider):
         body: Dict[str, Any] = {
             "model": self._model,
             "messages": messages,
-            "max_tokens": self._max_tokens,
+            "max_completion_tokens": self._max_tokens,
             "temperature": self._temperature,
         }
         if json_mode:
