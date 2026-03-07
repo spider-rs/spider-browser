@@ -1,5 +1,5 @@
 import type { ProtocolAdapter } from './protocol/protocol-adapter.js';
-import { BlockedError, TimeoutError } from './utils/errors.js';
+import { BlockedError, NavigationError, TimeoutError } from './utils/errors.js';
 
 /**
  * SpiderPage — deterministic browser tab abstraction.
@@ -74,6 +74,11 @@ export class SpiderPage {
     // navigation, so this skips the expensive networkIdle wait entirely.
     if (waitMs > 0) {
       const earlyHtml = (await this.adapter.getHTML()) ?? '';
+      // Chrome error pages won't auto-resolve — fail fast so retry engine rotates browser
+      const earlyErrCode = this.isChromeErrorPage(earlyHtml);
+      if (earlyErrCode) {
+        throw new NavigationError(`Chrome error page: ${earlyErrCode}`);
+      }
       if (
         earlyHtml.length >= minLength &&
         !this.isInterstitialContent(earlyHtml) &&
@@ -85,6 +90,12 @@ export class SpiderPage {
     }
 
     let html = (await this.adapter.getHTML()) ?? '';
+
+    // Chrome error pages — fail fast, no point waiting for interstitial resolution
+    const errCode = this.isChromeErrorPage(html);
+    if (errCode) {
+      throw new NavigationError(`Chrome error page: ${errCode}`);
+    }
 
     // Interstitial detection — wait for challenge pages to resolve before failing.
     // Cloudflare "Just a moment...", PerimeterX "Verifying the device...", and similar
@@ -168,6 +179,8 @@ export class SpiderPage {
     const deadline = Date.now() + maxWaitMs;
     while (Date.now() < deadline) {
       const html = (await this.adapter.getHTML()) ?? '';
+      const pollErrCode = this.isChromeErrorPage(html);
+      if (pollErrCode) throw new NavigationError(`Chrome error page: ${pollErrCode}`);
       if (
         html.length >= minContentLength &&
         !this.isInterstitialContent(html) &&
@@ -207,6 +220,8 @@ export class SpiderPage {
 
     // Phase 1: Quick check — SSR pages have content immediately
     let html = (await this.adapter.getHTML()) ?? '';
+    const phase1ErrCode = this.isChromeErrorPage(html);
+    if (phase1ErrCode) throw new NavigationError(`Chrome error page: ${phase1ErrCode}`);
     if (html.length >= minContentLength && !this.isInterstitialContent(html) && !this.isRateLimitContent(html)) {
       return html;
     }
@@ -251,6 +266,8 @@ export class SpiderPage {
 
     // Check content after idle
     html = (await this.adapter.getHTML()) ?? '';
+    const idleErrCode = this.isChromeErrorPage(html);
+    if (idleErrCode) throw new NavigationError(`Chrome error page: ${idleErrCode}`);
     if (html.length >= minContentLength && !this.isInterstitialContent(html) && !this.isRateLimitContent(html)) {
       return html;
     }
@@ -801,6 +818,35 @@ export class SpiderPage {
       lower.includes('too many requests') ||
       (lower.includes('rate limit') && lower.includes('please try again'))
     );
+  }
+
+  /**
+   * Detect Chrome/Edge native error pages rendered as HTML.
+   * These appear when navigation "succeeds" at CDP level but Chrome renders
+   * its built-in error page (e.g. "This site can't be reached").
+   * Small pages only to avoid false positives on real content.
+   */
+  private isChromeErrorPage(html: string): string | null {
+    if (html.length > 10_000) return null;
+    const lower = html.toLowerCase();
+    // Chrome error codes embedded in the rendered error page
+    const errorCodes = [
+      'err_connection_reset', 'err_connection_refused', 'err_connection_timed_out',
+      'err_name_not_resolved', 'err_internet_disconnected', 'err_timed_out',
+      'err_empty_response', 'err_ssl_protocol_error', 'err_network_changed',
+      'err_connection_closed',
+    ];
+    for (const code of errorCodes) {
+      if (lower.includes(code)) return code;
+    }
+    // Chrome/Edge error page title patterns (smart quotes and plain)
+    if (
+      (lower.includes("site can\u2019t be reached") || lower.includes("site can't be reached") ||
+       lower.includes("page isn\u2019t working") || lower.includes("page isn't working") ||
+       lower.includes("can\u2019t reach this page") || lower.includes("can't reach this page")) &&
+      lower.includes('check')
+    ) return 'chrome_error_page';
+    return null;
   }
 }
 
