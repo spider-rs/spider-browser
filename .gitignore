@@ -15,6 +15,10 @@ build/
 # Rust
 target/
 
+# Local debug/verify test scripts
+**/debug-*.ts
+**/verify-*.ts
+
 # Test data (synced to spider-browser-dataset)
 stealth-*.csv
 stealth-*.json
