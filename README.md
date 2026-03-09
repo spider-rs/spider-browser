@@ -3,6 +3,7 @@
 [![npm](https://img.shields.io/npm/v/spider-browser)](https://www.npmjs.com/package/spider-browser)
 [![PyPI](https://img.shields.io/pypi/v/spider-browser)](https://pypi.org/project/spider-browser/)
 [![crates.io](https://img.shields.io/crates/v/spider-browser)](https://crates.io/crates/spider-browser)
+[![Go Reference](https://pkg.go.dev/badge/github.com/spider-rs/spider-browser/go.svg)](https://pkg.go.dev/github.com/spider-rs/spider-browser/go)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Browser automation that works on every website.
@@ -13,6 +14,7 @@ Browser automation that works on every website.
 npm install spider-browser        # TypeScript
 pip install spider-browser        # Python
 cargo add spider-browser           # Rust
+go get github.com/spider-rs/spider-browser/go  # Go
 ```
 
 ## Get Started
@@ -61,6 +63,37 @@ let html = browser.page().content().await?;
 let screenshot = browser.page().screenshot().await?;
 
 browser.close().await?;
+```
+
+</details>
+
+<details>
+<summary>Go</summary>
+
+```go
+package main
+
+import (
+	"os"
+
+	spiderbrowser "github.com/spider-rs/spider-browser/go"
+)
+
+func main() {
+	browser := spiderbrowser.New(spiderbrowser.SpiderBrowserOptions{
+		APIKey: os.Getenv("SPIDER_API_KEY"),
+	})
+	if err := browser.Init(); err != nil {
+		panic(err)
+	}
+	defer browser.Close()
+
+	browser.Page().Goto("https://example.com")
+	html, _ := browser.Page().Content(0, 0)
+	screenshot, _ := browser.Page().Screenshot()
+	_ = html
+	_ = screenshot
+}
 ```
 
 </details>
