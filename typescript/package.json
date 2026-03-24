@@ -1,6 +1,6 @@
 {
   "name": "spider-browser",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Browser automation client for Spider's pre-warmed browser fleet with smart retry and browser switching",
   "type": "module",
   "main": "./dist/index.cjs",

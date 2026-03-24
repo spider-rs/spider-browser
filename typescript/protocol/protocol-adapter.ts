@@ -200,6 +200,22 @@ export class ProtocolAdapter {
     return this.bidi!.getHTML();
   }
 
+  /**
+   * Send a Spider.* command to the server and return the result.
+   * Works over CDP (sends via sendToTarget which adds sessionId).
+   * Throws if the server returns an error or doesn't support the command.
+   */
+  async sendCommand(method: string, params?: Record<string, unknown>): Promise<unknown> {
+    if (this.cdp) {
+      const resp = await this.cdp.sendToTarget(method, params);
+      if (resp.error) {
+        throw new Error((resp.error as any).message ?? `${method} failed`);
+      }
+      return resp.result;
+    }
+    throw new Error(`${method} is not supported over BiDi`);
+  }
+
   /** Evaluate JavaScript expression. */
   async evaluate(expression: string): Promise<unknown> {
     if (this.cdp) {

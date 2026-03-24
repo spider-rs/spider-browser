@@ -2,7 +2,7 @@
 // https://spider.cloud
 
 export { SpiderBrowser, type SpiderBrowserOptions } from './spider-browser.js';
-export { SpiderPage } from './page.js';
+export { SpiderPage, type ScrapeOptions } from './page.js';
 
 // Events
 export { SpiderEventEmitter } from './events/emitter.js';

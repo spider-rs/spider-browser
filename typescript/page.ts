@@ -1,6 +1,18 @@
 import type { ProtocolAdapter } from './protocol/protocol-adapter.js';
 import { BlockedError, NavigationError, TimeoutError } from './utils/errors.js';
 
+/** Options for `page.scrape()`. Provide one of `fields`, `domain`, or `slug`. */
+export interface ScrapeOptions {
+  /** Custom CSS selectors for extraction. */
+  fields?: Record<string, string | { selector: string; attribute: string }>;
+  /** Target domain for built-in pattern lookup (e.g. "amazon.com"). */
+  domain?: string;
+  /** Scraper slug for specific built-in pattern (e.g. "amazon-scraper"). */
+  slug?: string;
+  /** Enable AI fallback for fields CSS can't resolve (default: true). */
+  aiFallback?: boolean;
+}
+
 /**
  * SpiderPage — deterministic browser tab abstraction.
  *
@@ -744,6 +756,63 @@ export class SpiderPage {
     `);
 
     return typeof result === 'string' ? JSON.parse(result) : {};
+  }
+
+  /**
+   * Scrape structured data from the current page.
+   *
+   * Uses server-side CSS extraction with automatic AI fallback for fields
+   * that selectors can't resolve. Supports three modes:
+   *
+   * 1. **Custom selectors** - pass `fields` with CSS selectors
+   * 2. **By domain** - pass `domain` (e.g. "amazon.com") to use built-in patterns
+   * 3. **By slug** - pass `slug` (e.g. "amazon-scraper") for a specific pattern
+   *
+   * Falls back to client-side extraction if the server doesn't support
+   * `Spider.scrape` (e.g. direct CDP connection without browser_server).
+   *
+   * @example
+   * ```ts
+   * // Custom selectors
+   * const data = await page.scrape({
+   *   fields: {
+   *     title: "#productTitle",
+   *     price: ".a-price .a-offscreen",
+   *     image: { selector: "#main-image", attribute: "src" },
+   *   },
+   * });
+   *
+   * // Auto-detect from domain (uses 1194 built-in patterns)
+   * const data = await page.scrape({ domain: "amazon.com" });
+   *
+   * // By scraper slug
+   * const data = await page.scrape({ slug: "amazon-scraper" });
+   * ```
+   */
+  async scrape(options: ScrapeOptions): Promise<Record<string, string | null>> {
+    const params: Record<string, unknown> = {};
+
+    if (options.fields) params.fields = options.fields;
+    if (options.domain) params.domain = options.domain;
+    if (options.slug) params.slug = options.slug;
+    if (options.aiFallback !== undefined) params.aiFallback = options.aiFallback;
+
+    // Try server-side Spider.scrape first (browser_server with extract crate)
+    try {
+      const resp = await this.adapter.sendCommand('Spider.scrape', params);
+      if (resp && typeof resp === 'object' && !('error' in resp)) {
+        return resp as Record<string, string | null>;
+      }
+    } catch {
+      // Server doesn't support Spider.scrape, fall back to client-side
+    }
+
+    // Fallback: client-side extractFields (only works with custom fields)
+    if (options.fields) {
+      return this.extractFields(options.fields);
+    }
+
+    return {};
   }
 
   // -------------------------------------------------------------------
