@@ -11,7 +11,7 @@ use super::failure_tracker::{FailureTracker, ROTATE_AFTER_FAILURES};
 ///
 /// `chrome-h` (ChromeXvfb) is the most reliable (99%), followed by
 /// `chrome-new` (92%). Shared chrome is excluded -- only 35-65% reliable.
-pub const PRIMARY_ROTATION: &[&str] = &["chrome-h", "chrome-new"];
+pub const PRIMARY_ROTATION: &[&str] = &["chrome-h", "chrome-new", "navi"];
 
 /// Extended browser rotation -- non-Chrome engines tried at max stealth only.
 pub const EXTENDED_ROTATION: &[&str] = &["firefox", "lightpanda", "servo"];
@@ -20,6 +20,7 @@ pub const EXTENDED_ROTATION: &[&str] = &["firefox", "lightpanda", "servo"];
 pub const BROWSER_ROTATION: &[&str] = &[
     "chrome-h",
     "chrome-new",
+    "navi",
     "firefox",
     "lightpanda",
     "servo",
@@ -139,7 +140,7 @@ mod tests {
         sel.failure_tracker().record_failure("d.com", "chrome-new");
         sel.failure_tracker().record_failure("d.com", "chrome-new");
 
-        assert_eq!(sel.next_browser("d.com", "chrome-h"), Some("firefox"));
+        assert_eq!(sel.next_browser("d.com", "chrome-h"), Some("navi"));
     }
 
     #[test]

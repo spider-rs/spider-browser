@@ -19,6 +19,8 @@ pub mod browsers {
     pub const FIREFOX: &str = "firefox";
     pub const SERVO: &str = "servo";
     pub const LIGHTPANDA: &str = "lightpanda";
+    /// Spider's custom Rust-based browser, optimized for fast scraping.
+    pub const NAVI: &str = "navi";
 }
 
 /// Lock-free event emitter using DashMap for concurrent handler access.

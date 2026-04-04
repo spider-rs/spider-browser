@@ -12,6 +12,7 @@ from .failure_tracker import FailureTracker, ROTATE_AFTER_FAILURES
 PRIMARY_ROTATION: List[BrowserType] = [
     "chrome",
     "chrome-new",
+    "navi",
 ]
 
 # Extended browsers — less stable backends + different engine fingerprints.

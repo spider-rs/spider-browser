@@ -77,6 +77,14 @@ export class NavigationError extends SpiderError {
   }
 }
 
+/** Permanent navigation error (DNS failure, QUIC broken). Never retried. */
+export class PermanentNavError extends SpiderError {
+  constructor(message: string) {
+    super(message, 'PERMANENT_NAV_ERROR', false);
+    this.name = 'PermanentNavError';
+  }
+}
+
 /** LLM call failed or returned unparseable response. */
 export class LLMError extends SpiderError {
   constructor(message: string) {

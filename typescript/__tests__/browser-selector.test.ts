@@ -17,8 +17,8 @@ describe('BrowserSelector', () => {
   });
 
   describe('rotation constants', () => {
-    it('PRIMARY_ROTATION contains stable Chrome backends', () => {
-      expect(PRIMARY_ROTATION).toEqual(['chrome-h', 'chrome-new']);
+    it('PRIMARY_ROTATION contains stable Chrome backends and navi', () => {
+      expect(PRIMARY_ROTATION).toEqual(['chrome-h', 'chrome-new', 'navi']);
     });
 
     it('EXTENDED_ROTATION contains non-Chrome engines', () => {
@@ -62,7 +62,8 @@ describe('BrowserSelector', () => {
 
     it('cycles through all browsers', () => {
       expect(selector.nextBrowser('example.com', 'chrome-h')).toBe('chrome-new');
-      expect(selector.nextBrowser('example.com', 'chrome-new')).toBe('firefox');
+      expect(selector.nextBrowser('example.com', 'chrome-new')).toBe('navi');
+      expect(selector.nextBrowser('example.com', 'navi')).toBe('firefox');
       expect(selector.nextBrowser('example.com', 'firefox')).toBe('lightpanda');
     });
 
@@ -71,8 +72,8 @@ describe('BrowserSelector', () => {
       for (let i = 0; i < ROTATE_AFTER_FAILURES; i++) {
         tracker.recordFailure('example.com', 'chrome-new');
       }
-      // chrome-h should skip chrome-new, try firefox next
-      expect(selector.nextBrowser('example.com', 'chrome-h')).toBe('firefox');
+      // chrome-h should skip chrome-new, try navi next
+      expect(selector.nextBrowser('example.com', 'chrome-h')).toBe('navi');
     });
 
     it('returns null when all browsers are exhausted', () => {

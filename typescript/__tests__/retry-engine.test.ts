@@ -358,20 +358,24 @@ describe('RetryEngine.orderedPrimaryBrowsers', () => {
     engine = createEngine();
   });
 
-  it('starting from chrome-h → [chrome-h, chrome-new]', () => {
-    expect(orderedPrimaryBrowsers(engine, 'chrome-h')).toEqual(['chrome-h', 'chrome-new']);
+  it('starting from chrome-h → [chrome-h, chrome-new, navi]', () => {
+    expect(orderedPrimaryBrowsers(engine, 'chrome-h')).toEqual(['chrome-h', 'chrome-new', 'navi']);
   });
 
-  it('starting from chrome-new → [chrome-new, chrome-h]', () => {
-    expect(orderedPrimaryBrowsers(engine, 'chrome-new')).toEqual(['chrome-new', 'chrome-h']);
+  it('starting from chrome-new → [chrome-new, navi, chrome-h]', () => {
+    expect(orderedPrimaryBrowsers(engine, 'chrome-new')).toEqual(['chrome-new', 'navi', 'chrome-h']);
+  });
+
+  it('starting from navi → [navi, chrome-h, chrome-new]', () => {
+    expect(orderedPrimaryBrowsers(engine, 'navi')).toEqual(['navi', 'chrome-h', 'chrome-new']);
   });
 
   it('starting from non-primary browser → default order', () => {
-    expect(orderedPrimaryBrowsers(engine, 'firefox')).toEqual(['chrome-h', 'chrome-new']);
+    expect(orderedPrimaryBrowsers(engine, 'firefox')).toEqual(['chrome-h', 'chrome-new', 'navi']);
   });
 
   it('starting from auto → default order', () => {
-    expect(orderedPrimaryBrowsers(engine, 'auto')).toEqual(['chrome-h', 'chrome-new']);
+    expect(orderedPrimaryBrowsers(engine, 'auto')).toEqual(['chrome-h', 'chrome-new', 'navi']);
   });
 });
 

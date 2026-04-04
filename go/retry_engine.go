@@ -9,7 +9,7 @@ import (
 
 // Browser rotation constants
 var (
-	primaryRotation  = []string{"chrome", "chrome-new", "chrome-h"}
+	primaryRotation  = []string{"chrome", "chrome-new", "chrome-h", "navi"}
 	extendedRotation = []string{"firefox", "lightpanda", "servo"}
 )
 

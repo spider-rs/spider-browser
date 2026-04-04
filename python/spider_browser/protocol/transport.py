@@ -68,13 +68,26 @@ class Transport:
         # Session metering
         self._session_credits_used: Optional[float] = None
 
+    def _ws_is_open(self) -> bool:
+        """Check if the WebSocket connection is open (compatible with websockets v12-v15+)."""
+        if self._ws is None:
+            return False
+        # websockets >= 14 uses .state instead of .open
+        if hasattr(self._ws, "open"):
+            return self._ws.open  # type: ignore[union-attr]
+        try:
+            from websockets.protocol import State
+            return self._ws.state is State.OPEN  # type: ignore[union-attr]
+        except (ImportError, AttributeError):
+            return True  # Assume open if we can't check
+
     @property
     def browser(self) -> BrowserType:
         return self._current_browser
 
     @property
     def connected(self) -> bool:
-        return self._ws is not None and self._ws.open
+        return self._ws is not None and self._ws_is_open()
 
     @property
     def stealth_level(self) -> int:
@@ -110,7 +123,7 @@ class Transport:
 
     async def request_metering(self, timeout_ms: int = 3000) -> float:
         """Request the current session cost from the server via Spider.getMetering."""
-        if not self._ws or not self._ws.open:
+        if not self._ws or not self._ws_is_open():
             return self._session_credits_used or 0
 
         metering_id = 2147483640  # High ID to avoid collisions
@@ -147,7 +160,7 @@ class Transport:
 
     async def connect(self, max_attempts: int = 3) -> None:
         """Connect to the WebSocket endpoint with retry."""
-        if self._ws and self._ws.open:
+        if self._ws and self._ws_is_open():
             return
 
         last_error: Optional[Exception] = None
@@ -175,12 +188,12 @@ class Transport:
         await self._connect_internal()
 
     def send(self, data: str) -> None:
-        if not self._ws or not self._ws.open:
+        if not self._ws or not self._ws_is_open():
             raise ConnectionError("WebSocket is not connected")
         asyncio.get_event_loop().create_task(self._ws.send(data))
 
     async def send_async(self, data: str) -> None:
-        if not self._ws or not self._ws.open:
+        if not self._ws or not self._ws_is_open():
             raise ConnectionError("WebSocket is not connected")
         await self._ws.send(data)
 

@@ -12,6 +12,7 @@ import {
   BackendUnavailableError,
   TimeoutError,
   NavigationError,
+  PermanentNavError,
 } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
 
@@ -44,6 +45,8 @@ const errorClassifier = new KeywordClassifier<ErrorClass>([
     'rate limit exceeded', 'too many requests',
     'err_blocked_by_client',
   ], 'blocked'],
+  // Permanent — DNS/QUIC errors that will never resolve on retry (checked before auth/transient)
+  [['err_name_not_resolved', 'err_quic_protocol_error'], 'permanent'],
   // Auth
   [['401', '402', 'unauthorized'], 'auth'],
   // Backend down
@@ -93,7 +96,7 @@ export interface RetryContext {
 }
 
 /** Error classification for retry decisions. */
-type ErrorClass = 'transient' | 'blocked' | 'backend_down' | 'auth' | 'rate_limit';
+type ErrorClass = 'transient' | 'blocked' | 'backend_down' | 'auth' | 'rate_limit' | 'permanent';
 
 /**
  * Smart retry engine with stealth-first escalation.
@@ -129,6 +132,8 @@ type ErrorClass = 'transient' | 'blocked' | 'backend_down' | 'auth' | 'rate_limi
  *
  * | Error Pattern              | Classification  | Action                                    |
  * |----------------------------|-----------------|-------------------------------------------|
+ * | ERR_NAME_NOT_RESOLVED      | Permanent       | Throw immediately (no retry)              |
+ * | ERR_QUIC_PROTOCOL_ERROR    | Permanent       | Throw immediately (no retry)              |
  * | ERR_ABORTED (nav)          | Transient+Disco | Reconnect (new session), retry up to 2x   |
  * | WS close 1006/1011         | Transient+Disco | Reconnect same browser, retry up to 2x    |
  * | Timeout                    | Transient       | Retry same browser up to 2x, then switch  |
@@ -258,6 +263,7 @@ export class RetryEngine {
           lastError = result.lastError;
           const errorClass = this.classifyError(lastError);
           wasBlocked = errorClass === 'blocked';
+          if (errorClass === 'permanent') throw lastError;
           if (errorClass === 'auth') throw lastError;
           // Track consecutive disconnects
           if (this.isDisconnectionError(lastError)) {
@@ -299,7 +305,8 @@ export class RetryEngine {
         if (result.success) return result.value!;
         if (result.lastError) {
           lastError = result.lastError;
-          if (this.classifyError(lastError) === 'auth') throw lastError;
+          const cls = this.classifyError(lastError);
+          if (cls === 'permanent' || cls === 'auth') throw lastError;
         }
       }
     }
@@ -385,6 +392,12 @@ export class RetryEngine {
           maxRetries: this.opts.maxRetries,
           error: lastError.message,
         });
+
+        // Permanent (DNS/QUIC) → throw immediately, no retries across any layer.
+        // Set totalAttempts to budget so execute() won't try more browsers.
+        if (errorClass === 'permanent') {
+          return { success: false, totalAttempts: budget, triedAction: true, lastError };
+        }
 
         // Auth → bubble up immediately (caller will throw)
         if (errorClass === 'auth') {
@@ -495,6 +508,7 @@ export class RetryEngine {
    */
   private classifyError(err: Error): ErrorClass {
     // Fast path: typed error instances (no string matching needed)
+    if (err instanceof PermanentNavError) return 'permanent';
     if (err instanceof AuthError) return 'auth';
     if (err instanceof RateLimitError) return 'rate_limit';
     if (err instanceof BlockedError) return 'blocked';

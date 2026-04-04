@@ -23,6 +23,7 @@ export interface SpiderBrowserOptions {
    * - `'auto'` — server picks the best browser automatically.
    * - `'chrome'` — Chrome.
    * - `'firefox'` — Firefox.
+   * - `'navi'` - Spider's custom Rust-based browser, optimized for fast scraping.
    */
   browser?: Browser;
   /** Target URL hint for server browser+proxy selection. */
