@@ -178,6 +178,7 @@ new SpiderBrowser({
   browser: 'auto',          // auto-selects best browser
   stealth: 0,               // 0=auto | 1 | 2 | 3
   country: 'US',            // geo-located proxy (US, GB, DE, ...)
+  proxyUrl: 'http://user:pass@host:port', // custom proxy (overrides country)
   captcha: 'solve',         // off | detect | solve
   record: false,            // screencast recording
   smartRetry: true,         // automatic retry + browser rotation
