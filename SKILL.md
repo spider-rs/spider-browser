@@ -13,6 +13,7 @@ metadata:
     - typescript
     - python
     - rust
+    - go
 ---
 
 # spider-browser
@@ -217,6 +218,8 @@ const result = await agent.execute(
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `apiKey` | `string` | *required* | Spider API key |
+| `serverUrl` | `string` | `wss://browser.spider.cloud` | WebSocket endpoint override |
+| `url` | `string` | — | Target URL hint; lets server pre-select browser + proxy |
 | `browser` | `"auto" \| "chrome" \| "firefox"` | `"auto"` | Browser engine preference |
 | `mode` | `"scraping" \| "cua"` | — | `scraping` for fast text, `cua` for full rendering |
 | `stealth` | `0-3` | `0` | Stealth level (0 = auto-escalate on failure) |

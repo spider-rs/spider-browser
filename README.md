@@ -176,6 +176,7 @@ await browser.page.waitForNetworkIdle();
 new SpiderBrowser({
   apiKey: 'sk-xxx',
   browser: 'auto',          // auto-selects best browser
+  mode: 'scraping',         // scraping (fast text) | cua (full render)
   stealth: 0,               // 0=auto | 1 | 2 | 3
   country: 'US',            // geo-located proxy (US, GB, DE, ...)
   proxyUrl: 'http://user:pass@host:port', // custom proxy (overrides country)
