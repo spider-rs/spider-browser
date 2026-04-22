@@ -225,6 +225,7 @@ const result = await agent.execute(
 | `smartRetry` | `boolean` | `true` | Enable smart retry with browser switching |
 | `maxRetries` | `number` | `12` | Max retry attempts across all browsers |
 | `country` | `string` | — | Geo-located proxy country code ("US", "GB", "DE") |
+| `proxyUrl` | `string` | — | Custom proxy URL (e.g. `http://user:pass@host:port`); overrides `country` |
 | `llm` | `LLMConfig` | — | LLM provider config for AI methods |
 | `record` | `boolean` | `false` | Enable screencast recording |
 | `hedge` | `boolean` | `false` | Mark as hedge session (parallel racing) |
