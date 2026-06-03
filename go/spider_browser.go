@@ -11,8 +11,7 @@ type SpiderBrowserOptions struct {
 	APIKey string
 	// ServerURL is the WebSocket server URL (default: wss://browser.spider.cloud).
 	ServerURL string
-	// Browser to use: "auto", "chrome", "firefox", "navi" (default: "auto").
-	// navi is Spider's custom Rust-based browser, optimized for fast scraping.
+	// Browser to use: "auto", "chrome", "firefox" (default: "auto").
 	Browser string
 	// URL hint for server browser+proxy selection.
 	URL string

@@ -52,8 +52,15 @@ export class Transport {
   /** Credits consumed during this session (from Spider.metering event). */
   private _sessionCreditsUsed: number | undefined;
 
+  /** Whether the caller pinned a specific browser. When false ('auto'), the
+   * server selects the browser based on `mode` and we omit the browser param. */
+  private explicitBrowser: boolean;
+
   constructor(opts: TransportOptions, emitter: SpiderEventEmitter) {
     this.opts = opts;
+    // 'auto' lets the server choose the browser; the local protocol adapter still
+    // defaults to CDP (chrome-h) since the server-selected scrape browser speaks CDP.
+    this.explicitBrowser = opts.browser !== 'auto';
     this.currentBrowser = opts.browser === 'auto' ? 'chrome-h' : opts.browser;
     this.emitter = emitter;
     this._stealthLevel = opts.stealthLevel ?? 0;
@@ -177,6 +184,7 @@ export class Transport {
   async reconnect(browser: string): Promise<void> {
     const prev = this.currentBrowser;
     this.currentBrowser = browser;
+    this.explicitBrowser = true; // retry pinned a specific browser
     this.close();
     logger.info(`switching browser: ${prev} -> ${browser}`);
     return this.connectInternal();
@@ -224,7 +232,9 @@ export class Transport {
     const base = this.opts.serverUrl.replace(/\/$/, '');
     const params = new URLSearchParams();
     params.set('token', this.opts.apiKey);
-    if (this.currentBrowser !== 'auto') {
+    // Only pin the browser when the caller asked for a specific one; otherwise
+    // leave it to the server, which selects based on `mode` (e.g. scrape mode).
+    if (this.explicitBrowser && this.currentBrowser !== 'auto') {
       params.set('browser', this.currentBrowser);
     }
     if (this.opts.url) {

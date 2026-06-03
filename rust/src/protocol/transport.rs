@@ -59,6 +59,9 @@ impl Default for TransportOptions {
 pub struct Transport {
     opts: TransportOptions,
     current_browser: ArcSwap<String>,
+    /// Whether the caller pinned a specific browser. When false ("auto"), the
+    /// server selects the browser from `mode` and we omit the browser param.
+    explicit_browser: AtomicBool,
     stealth_level: AtomicU64,
     emitter: SpiderEventEmitter,
     /// Channel for outgoing WS messages — writer task drains this.
@@ -80,6 +83,10 @@ pub struct Transport {
 
 impl Transport {
     pub fn new(opts: TransportOptions, emitter: SpiderEventEmitter) -> Arc<Self> {
+        // "auto" lets the server choose the browser; the local protocol adapter
+        // still defaults to CDP (chrome-h) since the server-selected scrape browser
+        // speaks CDP. `explicit_browser` records whether the caller pinned one.
+        let explicit_browser = opts.browser != "auto";
         let browser = if opts.browser == "auto" {
             "chrome-h".to_string()
         } else {
@@ -92,6 +99,7 @@ impl Transport {
         Arc::new(Self {
             opts,
             current_browser: ArcSwap::from_pointee(browser),
+            explicit_browser: AtomicBool::new(explicit_browser),
             stealth_level: AtomicU64::new(stealth as u64),
             emitter,
             ws_send_tx: ws_tx,
@@ -193,6 +201,7 @@ impl Transport {
         let prev = self.browser();
         self.current_browser
             .store(Arc::new(browser.to_string()));
+        self.explicit_browser.store(true, Ordering::Relaxed); // retry pinned a browser
         self.close();
         info!("switching browser: {} -> {}", prev, browser);
         self.connect_internal().await
@@ -210,7 +219,9 @@ impl Transport {
     fn build_url(&self, browser: &str, stealth: u32) -> String {
         let base = self.opts.server_url.trim_end_matches('/');
         let mut params = vec![format!("token={}", self.opts.api_key)];
-        if browser != "auto" {
+        // Only pin the browser when the caller asked for a specific one; otherwise
+        // leave it to the server, which selects based on `mode` (e.g. scrape mode).
+        if self.explicit_browser.load(Ordering::Relaxed) && browser != "auto" {
             params.push(format!("browser={browser}"));
         }
         if let Some(ref url) = self.opts.url {

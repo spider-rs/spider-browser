@@ -3,15 +3,14 @@
  * - `'auto'` — server picks the best browser automatically.
  * - `'chrome'` — Chrome (multiple headless variants available server-side).
  * - `'firefox'` — Firefox via WebDriver BiDi protocol.
- * - `'navi'` — Spider's custom Rust-based browser, optimized for fast scraping.
  */
-export type Browser = 'auto' | 'chrome' | 'firefox' | 'navi';
+export type Browser = 'auto' | 'chrome' | 'firefox';
 
 /**
  * Internal browser backend identifiers.
  * @internal Not part of the public API — use {@link Browser} instead.
  */
-export type BrowserType = 'chrome' | 'chrome-new' | 'chrome-h' | 'firefox' | 'servo' | 'lightpanda' | 'navi' | 'auto';
+export type BrowserType = 'chrome' | 'chrome-new' | 'chrome-h' | 'firefox' | 'servo' | 'lightpanda' | 'auto';
 
 /** All events emitted by SpiderBrowser. */
 export interface SpiderEvents {

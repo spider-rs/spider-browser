@@ -56,6 +56,9 @@ type Transport struct {
 	opts           TransportOptions
 	emitter        *EventEmitter
 	currentBrowser string
+	// explicitBrowser is true when the caller pinned a specific browser. When
+	// false ("auto"), the server selects the browser from mode and we omit the param.
+	explicitBrowser bool
 	stealthLevel   int
 	generation     int64
 	messageHandler func(data string)
@@ -71,15 +74,19 @@ type Transport struct {
 // NewTransport creates a new WebSocket transport.
 func NewTransport(opts TransportOptions, emitter *EventEmitter) *Transport {
 	opts.defaults()
+	// "auto" lets the server choose the browser; the local protocol adapter still
+	// defaults to CDP (chrome-h) since the server-selected scrape browser speaks CDP.
+	explicitBrowser := opts.Browser != "auto"
 	browser := opts.Browser
 	if browser == "auto" {
 		browser = "chrome-h"
 	}
 	return &Transport{
-		opts:           opts,
-		emitter:        emitter,
-		currentBrowser: browser,
-		stealthLevel:   opts.StealthLevel,
+		opts:            opts,
+		emitter:         emitter,
+		currentBrowser:  browser,
+		explicitBrowser: explicitBrowser,
+		stealthLevel:    opts.StealthLevel,
 	}
 }
 
@@ -159,6 +166,7 @@ func (t *Transport) Reconnect(browser string) error {
 	t.mu.Lock()
 	prev := t.currentBrowser
 	t.currentBrowser = browser
+	t.explicitBrowser = true // retry pinned a specific browser
 	t.mu.Unlock()
 
 	t.Close()
@@ -278,10 +286,13 @@ func (t *Transport) buildURL() string {
 
 	t.mu.Lock()
 	browser := t.currentBrowser
+	explicitBrowser := t.explicitBrowser
 	stealth := t.stealthLevel
 	t.mu.Unlock()
 
-	if browser != "auto" {
+	// Only pin the browser when the caller asked for a specific one; otherwise
+	// leave it to the server, which selects based on mode (e.g. scrape mode).
+	if explicitBrowser && browser != "auto" {
 		params.Set("browser", browser)
 	}
 	if t.opts.URL != "" {

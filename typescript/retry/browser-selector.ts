@@ -9,7 +9,6 @@ import { FailureTracker, ROTATE_AFTER_FAILURES } from './failure-tracker.js';
 export const PRIMARY_ROTATION: string[] = [
   'chrome-h',
   'chrome-new',
-  'navi',
 ];
 
 /**

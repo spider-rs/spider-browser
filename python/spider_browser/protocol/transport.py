@@ -44,6 +44,11 @@ class Transport:
     ) -> None:
         self._api_key = api_key
         self._server_url = server_url.rstrip("/")
+        # "auto" lets the server choose the browser (it picks based on `mode`).
+        # We still default the local protocol adapter to CDP (chrome-h) since the
+        # server-selected scrape browser speaks CDP; `_explicit_browser` tracks
+        # whether the caller pinned a browser so we know whether to send the param.
+        self._explicit_browser: bool = browser != "auto"
         self._current_browser: BrowserType = "chrome-h" if browser == "auto" else browser
         self._url = url
         self._captcha = captcha
@@ -183,6 +188,7 @@ class Transport:
     async def reconnect(self, browser: BrowserType) -> None:
         prev = self._current_browser
         self._current_browser = browser
+        self._explicit_browser = True  # retry pinned a specific browser
         await self.close()
         logger.info(f"switching browser: {prev} -> {browser}")
         await self._connect_internal()
@@ -214,7 +220,9 @@ class Transport:
 
     def _build_url(self) -> str:
         params: dict[str, str] = {"token": self._api_key}
-        if self._current_browser != "auto":
+        # Only pin the browser when the caller asked for a specific one; otherwise
+        # leave it to the server, which selects based on `mode` (e.g. scrape mode).
+        if self._explicit_browser and self._current_browser != "auto":
             params["browser"] = self._current_browser
         if self._url:
             params["url"] = self._url
