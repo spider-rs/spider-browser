@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "spider-browser"
-version = "0.2.6"
+version = "0.3.0"
 description = "Browser automation client for Spider's pre-warmed browser fleet with smart retry and browser switching"
 requires-python = ">=3.10"
 license = "MIT"
