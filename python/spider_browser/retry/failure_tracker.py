@@ -15,11 +15,14 @@ ROTATE_AFTER_FAILURES = 2
 
 
 class _FailureRecord:
-    __slots__ = ("count", "last_failure")
+    __slots__ = ("count", "last_failure", "error_class")
 
     def __init__(self) -> None:
         self.count = 0
         self.last_failure = 0.0
+        # Class of the most recent failure ("blocked", "transient", ...). Used by
+        # clear_class() to selectively reset failures on stealth escalation.
+        self.error_class = "transient"
 
 
 class FailureTracker:
@@ -32,16 +35,18 @@ class FailureTracker:
     def _key(domain: str, browser: BrowserType) -> str:
         return f"{domain}::{browser}"
 
-    def record_failure(self, domain: str, browser: BrowserType) -> None:
+    def record_failure(self, domain: str, browser: BrowserType, error_class: str = "transient") -> None:
         k = self._key(domain, browser)
         rec = self._failures.get(k)
         if rec:
             rec.count += 1
             rec.last_failure = time.monotonic()
+            rec.error_class = error_class
         else:
             rec = _FailureRecord()
             rec.count = 1
             rec.last_failure = time.monotonic()
+            rec.error_class = error_class
             self._failures[k] = rec
 
     def record_success(self, domain: str, browser: BrowserType) -> None:
@@ -65,6 +70,27 @@ class FailureTracker:
                 if now - rec.last_failure < FAILURE_TTL_S:
                     total += rec.count
         return total
+
+    def clear(self, domain: str) -> None:
+        """Clear all failure records for a domain (regardless of class)."""
+        prefix = f"{domain}::"
+        # Snapshot the keys first so we never mutate the dict while iterating it.
+        for key in [k for k in self._failures if k.startswith(prefix)]:
+            self._failures.pop(key, None)
+
+    def clear_class(self, domain: str, error_class: str) -> None:
+        """Clear only failures of a given class for a domain.
+
+        Used on stealth escalation: ``blocked`` failures are cleared (a higher
+        stealth tier can bypass the block), while ``transient``/disconnect
+        failures are retained (escalating stealth won't fix flaky infra, so we
+        keep skipping a browser that keeps dropping on this domain).
+        """
+        prefix = f"{domain}::"
+        # Snapshot the keys first so we never mutate the dict while iterating it.
+        for key in [k for k, r in self._failures.items()
+                    if k.startswith(prefix) and r.error_class == error_class]:
+            self._failures.pop(key, None)
 
     def cleanup(self) -> None:
         now = time.monotonic()

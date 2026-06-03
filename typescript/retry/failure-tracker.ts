@@ -8,6 +8,9 @@ export const ROTATE_AFTER_FAILURES = 2;
 interface FailureRecord {
   count: number;
   lastFailure: number;
+  /** Class of the most recent failure ("blocked", "transient", ...). Used by
+   * clearClass() to selectively reset failures on stealth escalation. */
+  errorClass: string;
 }
 
 /**
@@ -24,14 +27,15 @@ export class FailureTracker {
   }
 
   /** Record a failure for a domain + browser. */
-  recordFailure(domain: string, browser: string): void {
+  recordFailure(domain: string, browser: string, errorClass: string = 'transient'): void {
     const k = this.key(domain, browser);
     const existing = this.failures.get(k);
     if (existing) {
       existing.count++;
       existing.lastFailure = Date.now();
+      existing.errorClass = errorClass;
     } else {
-      this.failures.set(k, { count: 1, lastFailure: Date.now() });
+      this.failures.set(k, { count: 1, lastFailure: Date.now(), errorClass });
     }
   }
 
@@ -64,10 +68,27 @@ export class FailureTracker {
     return total;
   }
 
-  /** Clear all failure records for a domain (used on stealth escalation). */
+  /** Clear all failure records for a domain (regardless of class). */
   clear(domain: string): void {
     for (const key of this.failures.keys()) {
       if (key.startsWith(`${domain}::`)) {
+        this.failures.delete(key);
+      }
+    }
+  }
+
+  /**
+   * Clear only failures of a given class for a domain.
+   *
+   * Used on stealth escalation: `blocked` failures are cleared (a higher stealth
+   * tier can bypass the block), while `transient`/disconnect failures are
+   * retained (escalating stealth won't fix flaky infra, so we keep skipping a
+   * browser that keeps dropping on this domain).
+   */
+  clearClass(domain: string, errorClass: string): void {
+    const prefix = `${domain}::`;
+    for (const [key, record] of this.failures) {
+      if (key.startsWith(prefix) && record.errorClass === errorClass) {
         this.failures.delete(key);
       }
     }

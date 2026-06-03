@@ -58,6 +58,19 @@ pub enum ErrorClass {
     RateLimit,
 }
 
+impl ErrorClass {
+    /// Canonical lowercase name, used when tagging failures in the tracker.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ErrorClass::Transient => "transient",
+            ErrorClass::Blocked => "blocked",
+            ErrorClass::BackendDown => "backend_down",
+            ErrorClass::Auth => "auth",
+            ErrorClass::RateLimit => "rate_limit",
+        }
+    }
+}
+
 /// Build the error classifier (Aho-Corasick, O(n) single-pass).
 ///
 /// Rules are priority-ordered -- first match wins.
@@ -318,9 +331,11 @@ impl RetryEngine {
                     }),
                 );
 
-                // Clear domain failure tracking so all browsers are available again
+                // Give blocked browsers a fresh shot at the new stealth tier, but
+                // retain transient/disconnect failures (stealth won't fix a browser
+                // that keeps dropping the WS on this domain).
                 if let Some(domain) = Self::extract_domain(ctx.current_url.as_deref()) {
-                    self.selector.failure_tracker().clear(&domain);
+                    self.selector.failure_tracker().clear_class(&domain, "blocked");
                 }
             }
 
@@ -542,7 +557,7 @@ impl RetryEngine {
                             {
                                 self.selector
                                     .failure_tracker()
-                                    .record_failure(&domain, browser);
+                                    .record_failure_class(&domain, browser, error_class.as_str());
                             }
                             return TryResult {
                                 success: false,
@@ -582,7 +597,7 @@ impl RetryEngine {
                         if let Some(domain) = Self::extract_domain(ctx.current_url.as_deref()) {
                             self.selector
                                 .failure_tracker()
-                                .record_failure(&domain, browser);
+                                .record_failure_class(&domain, browser, error_class.as_str());
                         }
                         return TryResult {
                             success: false,
@@ -598,7 +613,7 @@ impl RetryEngine {
                         if let Some(domain) = Self::extract_domain(ctx.current_url.as_deref()) {
                             self.selector
                                 .failure_tracker()
-                                .record_failure(&domain, browser);
+                                .record_failure_class(&domain, browser, error_class.as_str());
                         }
                         return TryResult {
                             success: false,
@@ -631,7 +646,7 @@ impl RetryEngine {
                                 {
                                     self.selector
                                         .failure_tracker()
-                                        .record_failure(&domain, browser);
+                                        .record_failure_class(&domain, browser, error_class.as_str());
                                 }
                                 return TryResult {
                                     success: false,
@@ -646,7 +661,7 @@ impl RetryEngine {
                         if let Some(domain) = Self::extract_domain(ctx.current_url.as_deref()) {
                             self.selector
                                 .failure_tracker()
-                                .record_failure(&domain, browser);
+                                .record_failure_class(&domain, browser, error_class.as_str());
                         }
                         return TryResult {
                             success: false,
@@ -670,7 +685,7 @@ impl RetryEngine {
                     if let Some(domain) = Self::extract_domain(ctx.current_url.as_deref()) {
                         self.selector
                             .failure_tracker()
-                            .record_failure(&domain, browser);
+                            .record_failure_class(&domain, browser, error_class.as_str());
                     }
                     return TryResult {
                         success: false,

@@ -7,7 +7,7 @@
 //! Completely lock-free: uses [`DashMap`] for concurrent read/write access
 //! with no `Mutex` anywhere.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use dashmap::DashMap;
@@ -18,20 +18,38 @@ const FAILURE_TTL_MS: u64 = 10 * 60 * 1000;
 /// Mirrors `hints.rs` ROTATE_AFTER_FAILURES.
 pub const ROTATE_AFTER_FAILURES: u32 = 2;
 
-/// A single failure record: count + last failure timestamp.
+// Failure-class codes, stored atomically so the record stays lock-free.
+const CLASS_TRANSIENT: u8 = 0;
+const CLASS_BLOCKED: u8 = 1;
+const CLASS_OTHER: u8 = 2;
+
+/// Map a failure-class string to its atomic code.
+fn class_code(error_class: &str) -> u8 {
+    match error_class {
+        "blocked" => CLASS_BLOCKED,
+        "transient" => CLASS_TRANSIENT,
+        _ => CLASS_OTHER,
+    }
+}
+
+/// A single failure record: count + last failure timestamp + last failure class.
 #[derive(Debug)]
 struct FailureRecord {
     /// Number of consecutive failures.
     count: AtomicU64,
     /// Timestamp (ms since UNIX epoch) of the last failure.
     last_failure: AtomicU64,
+    /// Class code of the most recent failure (see `CLASS_*`). Used by
+    /// `clear_class` to selectively reset failures on stealth escalation.
+    error_class: AtomicU8,
 }
 
 impl FailureRecord {
-    fn new(now_ms: u64) -> Self {
+    fn new(now_ms: u64, class: u8) -> Self {
         Self {
             count: AtomicU64::new(1),
             last_failure: AtomicU64::new(now_ms),
+            error_class: AtomicU8::new(class),
         }
     }
 }
@@ -54,15 +72,24 @@ impl FailureTracker {
         }
     }
 
-    /// Record a failure for a domain + browser pair.
+    /// Record a failure for a domain + browser pair (defaults to the
+    /// "transient" class). See [`record_failure_class`](Self::record_failure_class).
     pub fn record_failure(&self, domain: &str, browser: &str) {
+        self.record_failure_class(domain, browser, "transient");
+    }
+
+    /// Record a failure tagged with its class ("blocked", "transient", ...) for
+    /// selective clearing on stealth escalation.
+    pub fn record_failure_class(&self, domain: &str, browser: &str, error_class: &str) {
         let key = make_key(domain, browser);
         let now = now_ms();
+        let class = class_code(error_class);
 
         // Try to update an existing record first.
         if let Some(existing) = self.failures.get(&key) {
             existing.count.fetch_add(1, Ordering::Relaxed);
             existing.last_failure.store(now, Ordering::Relaxed);
+            existing.error_class.store(class, Ordering::Relaxed);
             return;
         }
 
@@ -75,8 +102,9 @@ impl FailureTracker {
             .and_modify(|rec| {
                 rec.count.fetch_add(1, Ordering::Relaxed);
                 rec.last_failure.store(now, Ordering::Relaxed);
+                rec.error_class.store(class, Ordering::Relaxed);
             })
-            .or_insert_with(|| FailureRecord::new(now));
+            .or_insert_with(|| FailureRecord::new(now, class));
     }
 
     /// Record a success -- clears the failure counter for a domain + browser.
@@ -121,7 +149,7 @@ impl FailureTracker {
         total
     }
 
-    /// Clear all failure records for a domain (used on stealth escalation).
+    /// Clear all failure records for a domain (regardless of class).
     pub fn clear(&self, domain: &str) {
         let prefix = format!("{domain}::");
         // Collect keys to remove -- cannot remove while iterating DashMap.
@@ -129,6 +157,31 @@ impl FailureTracker {
             .failures
             .iter()
             .filter(|entry| entry.key().starts_with(&prefix))
+            .map(|entry| entry.key().clone())
+            .collect();
+
+        for key in keys_to_remove {
+            self.failures.remove(&key);
+        }
+    }
+
+    /// Clear only failures of a given class for a domain.
+    ///
+    /// Used on stealth escalation: `blocked` failures are cleared (a higher
+    /// stealth tier can bypass the block), while `transient`/disconnect failures
+    /// are retained (escalating stealth won't fix flaky infra, so we keep
+    /// skipping a browser that keeps dropping on this domain).
+    pub fn clear_class(&self, domain: &str, error_class: &str) {
+        let prefix = format!("{domain}::");
+        let class = class_code(error_class);
+        // Collect keys to remove -- cannot remove while iterating DashMap.
+        let keys_to_remove: Vec<String> = self
+            .failures
+            .iter()
+            .filter(|entry| {
+                entry.key().starts_with(&prefix)
+                    && entry.value().error_class.load(Ordering::Relaxed) == class
+            })
             .map(|entry| entry.key().clone())
             .collect();
 
@@ -234,5 +287,38 @@ mod tests {
         tracker.record_failure("example.com", "chrome-h");
         tracker.cleanup();
         assert_eq!(tracker.failure_count("example.com", "chrome-h"), 1);
+    }
+
+    #[test]
+    fn clear_class_clears_only_matching_class() {
+        let tracker = FailureTracker::new();
+        tracker.record_failure_class("example.com", "chrome-h", "blocked");
+        tracker.record_failure_class("example.com", "chrome-h", "blocked");
+        tracker.record_failure_class("example.com", "firefox", "transient");
+        tracker.record_failure_class("other.com", "chrome-h", "blocked");
+
+        // stealth escalation: clear blocked, keep transient
+        tracker.clear_class("example.com", "blocked");
+
+        assert_eq!(tracker.failure_count("example.com", "chrome-h"), 0); // blocked cleared
+        assert_eq!(tracker.failure_count("example.com", "firefox"), 1); // transient retained
+        assert_eq!(tracker.failure_count("other.com", "chrome-h"), 1); // other domain untouched
+    }
+
+    #[test]
+    fn clear_class_uses_most_recent_class() {
+        let tracker = FailureTracker::new();
+        tracker.record_failure_class("example.com", "chrome-h", "blocked");
+        tracker.record_failure_class("example.com", "chrome-h", "transient"); // latest = transient
+        tracker.clear_class("example.com", "blocked");
+        assert_eq!(tracker.failure_count("example.com", "chrome-h"), 2); // retained
+    }
+
+    #[test]
+    fn record_failure_defaults_to_transient() {
+        let tracker = FailureTracker::new();
+        tracker.record_failure("example.com", "chrome-h"); // default class
+        tracker.clear_class("example.com", "blocked");
+        assert_eq!(tracker.failure_count("example.com", "chrome-h"), 1); // not cleared
     }
 }

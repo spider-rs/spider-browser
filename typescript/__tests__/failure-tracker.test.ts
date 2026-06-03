@@ -100,6 +100,41 @@ describe('FailureTracker', () => {
     });
   });
 
+  describe('clearClass', () => {
+    it('clears only the matching class, retaining others', () => {
+      tracker.recordFailure('example.com', 'chrome', 'blocked');
+      tracker.recordFailure('example.com', 'chrome', 'blocked');
+      tracker.recordFailure('example.com', 'firefox', 'transient');
+      tracker.recordFailure('other.com', 'chrome', 'blocked');
+
+      // stealth escalation: clear blocked, keep transient
+      tracker.clearClass('example.com', 'blocked');
+
+      expect(tracker.failureCount('example.com', 'chrome')).toBe(0); // blocked cleared
+      expect(tracker.failureCount('example.com', 'firefox')).toBe(1); // transient retained
+      expect(tracker.failureCount('other.com', 'chrome')).toBe(1); // other domain untouched
+    });
+
+    it('uses the most recent failure class', () => {
+      tracker.recordFailure('example.com', 'chrome', 'blocked');
+      tracker.recordFailure('example.com', 'chrome', 'transient'); // latest = transient
+
+      tracker.clearClass('example.com', 'blocked');
+
+      expect(tracker.failureCount('example.com', 'chrome')).toBe(2); // retained
+    });
+
+    it('defaults recordFailure class to transient (retained on blocked clear)', () => {
+      tracker.recordFailure('example.com', 'chrome');
+      tracker.clearClass('example.com', 'blocked');
+      expect(tracker.failureCount('example.com', 'chrome')).toBe(1);
+    });
+
+    it('is a safe no-op for unknown domains', () => {
+      expect(() => tracker.clearClass('nope.com', 'blocked')).not.toThrow();
+    });
+  });
+
   describe('TTL expiration', () => {
     it('returns 0 after TTL expires', () => {
       tracker.recordFailure('example.com', 'chrome');

@@ -118,7 +118,10 @@ class RetryEngine:
 
                 domain = self._extract_domain(ctx.current_url)
                 if domain:
-                    self._selector.failure_tracker.clear(domain)
+                    # Give blocked browsers a fresh shot at the new stealth tier,
+                    # but retain transient/disconnect failures (stealth won't fix
+                    # a browser that keeps dropping the WS on this domain).
+                    self._selector.failure_tracker.clear_class(domain, "blocked")
 
             # Phase 1: Try PRIMARY browsers (Chrome variants)
             primary_browsers = (
@@ -274,7 +277,7 @@ class RetryEngine:
                 if error_class == "blocked":
                     domain = self._extract_domain(ctx.current_url)
                     if domain:
-                        self._selector.failure_tracker.record_failure(domain, browser)
+                        self._selector.failure_tracker.record_failure(domain, browser, error_class)
                     return False, None, total_attempts, True, last_error
 
                 # WS disconnection → skip transient retries, rotate to next browser.
@@ -282,7 +285,7 @@ class RetryEngine:
                 if error_class == "transient" and self._is_disconnection_error(err):
                     domain = self._extract_domain(ctx.current_url)
                     if domain:
-                        self._selector.failure_tracker.record_failure(domain, browser)
+                        self._selector.failure_tracker.record_failure(domain, browser, error_class)
                     return False, None, total_attempts, True, last_error
 
                 # Non-disconnect transient → retry same browser up to max_transient
@@ -294,7 +297,7 @@ class RetryEngine:
                 # Transient exhausted → move to next browser
                 domain = self._extract_domain(ctx.current_url)
                 if domain:
-                    self._selector.failure_tracker.record_failure(domain, browser)
+                    self._selector.failure_tracker.record_failure(domain, browser, error_class)
                 return False, None, total_attempts, True, last_error
 
         return False, None, total_attempts, True, last_error

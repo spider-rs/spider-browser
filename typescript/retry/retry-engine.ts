@@ -231,9 +231,11 @@ export class RetryEngine {
           reason: lastError ? this.classifyError(lastError) : 'exhausted',
         });
 
-        // Clear domain failure tracking so all browsers are available again
+        // Give blocked browsers a fresh shot at the new stealth tier, but retain
+        // transient/disconnect failures (stealth won't fix a browser that keeps
+        // dropping the WS on this domain).
         const domain = this.extractDomain(ctx.currentUrl);
-        if (domain) this.selector.failureTracker.clear(domain);
+        if (domain) this.selector.failureTracker.clearClass(domain, 'blocked');
       }
 
       const primaryBrowsers = si === 0
@@ -413,7 +415,7 @@ export class RetryEngine {
           if (transientRetries >= 2) {
             // 2+ consecutive rate limits on this browser → rotate to next
             const domain = this.extractDomain(ctx.currentUrl);
-            if (domain) this.selector.failureTracker.recordFailure(domain, browser);
+            if (domain) this.selector.failureTracker.recordFailure(domain, browser, errorClass);
             return { success: false, totalAttempts, triedAction: true, lastError };
           }
           const baseMs = lastError instanceof RateLimitError && lastError.retryAfterMs
@@ -433,7 +435,7 @@ export class RetryEngine {
         // Blocked → record failure, move to next browser
         if (errorClass === 'blocked') {
           const domain = this.extractDomain(ctx.currentUrl);
-          if (domain) this.selector.failureTracker.recordFailure(domain, browser);
+          if (domain) this.selector.failureTracker.recordFailure(domain, browser, errorClass);
           return { success: false, totalAttempts, triedAction: true, lastError };
         }
 
@@ -443,7 +445,7 @@ export class RetryEngine {
         // retries that would otherwise burn the page timeout budget.
         if (lastError instanceof TimeoutError) {
           const domain = this.extractDomain(ctx.currentUrl);
-          if (domain) this.selector.failureTracker.recordFailure(domain, browser);
+          if (domain) this.selector.failureTracker.recordFailure(domain, browser, errorClass);
           return { success: false, totalAttempts, triedAction: true, lastError };
         }
 
@@ -463,13 +465,13 @@ export class RetryEngine {
               await this.switchBrowser(ctx, reconnectBrowser);
             } catch {
               const domain = this.extractDomain(ctx.currentUrl);
-              if (domain) this.selector.failureTracker.recordFailure(domain, browser);
+              if (domain) this.selector.failureTracker.recordFailure(domain, browser, errorClass);
               return { success: false, totalAttempts, triedAction: true, lastError };
             }
             continue; // Retry the action
           }
           const domain = this.extractDomain(ctx.currentUrl);
-          if (domain) this.selector.failureTracker.recordFailure(domain, browser);
+          if (domain) this.selector.failureTracker.recordFailure(domain, browser, errorClass);
           return { success: false, totalAttempts, triedAction: true, lastError };
         }
 
@@ -482,7 +484,7 @@ export class RetryEngine {
 
         // Transient retry exhausted → move to next browser
         const domain = this.extractDomain(ctx.currentUrl);
-        if (domain) this.selector.failureTracker.recordFailure(domain, browser);
+        if (domain) this.selector.failureTracker.recordFailure(domain, browser, errorClass);
         return { success: false, totalAttempts, triedAction: true, lastError };
       }
     }
