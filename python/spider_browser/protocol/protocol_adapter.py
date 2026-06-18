@@ -12,6 +12,7 @@ from .bidi_session import BiDiSession
 from ..events.emitter import SpiderEventEmitter
 from ..events.types import BrowserType
 from .types import get_key_params
+from ..utils.errors import ProtocolError
 from ..utils.logger import logger
 
 
@@ -95,6 +96,16 @@ class ProtocolAdapter:
         if self._cdp:
             return await self._cdp.evaluate(expression)
         return await self._bidi.evaluate(expression)  # type: ignore
+
+    async def send_command(self, method: str, params: Optional[dict[str, Any]] = None) -> Any:
+        """Send a raw page-scoped CDP command and return its result. CDP-only."""
+        if self._cdp:
+            resp = await self._cdp.send_to_target(method, params or {})
+            err = resp.get("error") if isinstance(resp, dict) else None
+            if err:
+                raise ProtocolError(err.get("message", f"{method} failed"))
+            return resp.get("result") if isinstance(resp, dict) else None
+        raise ProtocolError(f"{method} is not supported over BiDi")
 
     async def capture_screenshot(self) -> str:
         if self._cdp:

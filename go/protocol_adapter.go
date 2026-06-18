@@ -167,6 +167,21 @@ func (pa *ProtocolAdapter) Evaluate(expression string) (any, error) {
 	return pa.bidi.Evaluate(expression)
 }
 
+// SendCommand sends a raw page-scoped CDP command and returns its result. CDP-only.
+func (pa *ProtocolAdapter) SendCommand(method string, params map[string]any) (any, error) {
+	if pa.cdp != nil {
+		resp, err := pa.cdp.SendToTarget(method, params)
+		if err != nil {
+			return nil, err
+		}
+		if resp.Error != nil {
+			return nil, fmt.Errorf("%s failed: %s", method, resp.Error.Message)
+		}
+		return resp.Result, nil
+	}
+	return nil, fmt.Errorf("%s is not supported over BiDi", method)
+}
+
 // CaptureScreenshot captures a screenshot as base64 PNG.
 func (pa *ProtocolAdapter) CaptureScreenshot() (string, error) {
 	if pa.cdp != nil {

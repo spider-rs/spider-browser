@@ -816,6 +816,55 @@ export class SpiderPage {
   }
 
   // -------------------------------------------------------------------
+  // Session snapshots — persist a session and resume it later
+  // -------------------------------------------------------------------
+
+  /**
+   * Save the current session as a portable snapshot you can persist and
+   * restore later — cookies, localStorage/sessionStorage, the current URL,
+   * extra request headers, and the viewport. Returns the snapshot blob; store
+   * it (your DB, a file, object storage) and pass it back to
+   * {@link restoreSnapshot} to pick up exactly where you left off.
+   *
+   * @param snapshotId Optional id to key the snapshot by on the server.
+   *
+   * @example
+   * ```typescript
+   * const snapshot = await page.saveSnapshot();
+   * // ...persist `snapshot` somewhere...
+   * await otherPage.restoreSnapshot(snapshot);
+   * ```
+   */
+  async saveSnapshot(snapshotId?: string): Promise<unknown> {
+    const params: Record<string, unknown> = {};
+    if (snapshotId !== undefined) params.id = snapshotId;
+    const resp = await this.adapter.sendCommand('Snapshot.capture', params);
+    // Return the blob directly for ergonomic round-tripping; fall back to the
+    // full result if the server shape differs.
+    if (resp && typeof resp === 'object' && 'snapshot' in (resp as Record<string, unknown>)) {
+      return (resp as Record<string, unknown>).snapshot;
+    }
+    return resp;
+  }
+
+  /**
+   * Restore a previously saved session snapshot into this page. Accepts either
+   * the blob returned by {@link saveSnapshot} or the full capture result.
+   */
+  async restoreSnapshot(snapshot: unknown): Promise<unknown> {
+    const blob =
+      snapshot && typeof snapshot === 'object' && 'snapshot' in (snapshot as Record<string, unknown>)
+        ? (snapshot as Record<string, unknown>).snapshot
+        : snapshot;
+    return this.adapter.sendCommand('Snapshot.restore', { snapshot: blob });
+  }
+
+  /** Delete a saved snapshot by id from the browser's local cache. */
+  async deleteSnapshot(snapshotId: string): Promise<unknown> {
+    return this.adapter.sendCommand('Snapshot.delete', { id: snapshotId });
+  }
+
+  // -------------------------------------------------------------------
   // Internals
   // -------------------------------------------------------------------
 

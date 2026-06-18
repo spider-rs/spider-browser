@@ -198,6 +198,18 @@ impl ProtocolAdapter {
         }
     }
 
+    /// Send a raw page-scoped CDP command and return its `result`. CDP-only.
+    pub async fn send_command(&self, method: &str, params: Value) -> Result<Value> {
+        if let Some(ref cdp) = self.cdp {
+            let resp = cdp.send_to_target(method, params).await?;
+            Ok(resp.get("result").cloned().unwrap_or(Value::Null))
+        } else {
+            Err(SpiderError::Protocol(format!(
+                "{method} is not supported over BiDi"
+            )))
+        }
+    }
+
     pub async fn capture_screenshot(&self) -> Result<String> {
         if let Some(ref cdp) = self.cdp {
             cdp.capture_screenshot().await

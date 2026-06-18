@@ -438,6 +438,49 @@ impl SpiderPage {
         self.adapter().evaluate(expression).await
     }
 
+    // -----------------------------------------------------------------
+    // Session snapshots -- persist a session and resume it later
+    // -----------------------------------------------------------------
+
+    /// Save the current session as a portable snapshot to persist and restore
+    /// later -- cookies, local/session storage, the current URL, extra request
+    /// headers, and the viewport. Returns the snapshot blob; store it and pass
+    /// it back to [`restore_snapshot`](Self::restore_snapshot) to resume.
+    pub async fn save_snapshot(&self, snapshot_id: Option<&str>) -> Result<Value> {
+        let mut params = serde_json::Map::new();
+        if let Some(id) = snapshot_id {
+            params.insert("id".into(), Value::String(id.to_string()));
+        }
+        let resp = self
+            .adapter()
+            .send_command("Snapshot.capture", Value::Object(params))
+            .await?;
+        // Return the blob directly for ergonomic round-tripping.
+        Ok(match resp.get("snapshot") {
+            Some(blob) => blob.clone(),
+            None => resp,
+        })
+    }
+
+    /// Restore a previously saved session snapshot into this page. Accepts the
+    /// blob from [`save_snapshot`](Self::save_snapshot) or the full result.
+    pub async fn restore_snapshot(&self, snapshot: Value) -> Result<Value> {
+        let blob = match snapshot.get("snapshot") {
+            Some(b) => b.clone(),
+            None => snapshot,
+        };
+        self.adapter()
+            .send_command("Snapshot.restore", serde_json::json!({ "snapshot": blob }))
+            .await
+    }
+
+    /// Delete a saved snapshot by id from the browser's local cache.
+    pub async fn delete_snapshot(&self, snapshot_id: &str) -> Result<Value> {
+        self.adapter()
+            .send_command("Snapshot.delete", serde_json::json!({ "id": snapshot_id }))
+            .await
+    }
+
     // =================================================================
     // Click Actions
     // =================================================================

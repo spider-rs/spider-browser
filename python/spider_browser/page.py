@@ -259,6 +259,35 @@ class SpiderPage:
         """Evaluate arbitrary JavaScript and return the result."""
         return await self._adapter.evaluate(expression)
 
+    # -- Session snapshots — persist a session and resume it later ----------
+
+    async def save_snapshot(self, snapshot_id: Optional[str] = None) -> Any:
+        """Save the current session as a portable snapshot to persist and restore
+        later — cookies, local/session storage, the current URL, extra request
+        headers, and the viewport. Returns the snapshot blob; store it and pass
+        it back to ``restore_snapshot`` to pick up where you left off."""
+        params: Dict[str, Any] = {}
+        if snapshot_id is not None:
+            params["id"] = snapshot_id
+        resp = await self._adapter.send_command("Snapshot.capture", params)
+        if isinstance(resp, dict) and "snapshot" in resp:
+            return resp["snapshot"]
+        return resp
+
+    async def restore_snapshot(self, snapshot: Any) -> Any:
+        """Restore a previously saved session snapshot into this page. Accepts the
+        blob returned by ``save_snapshot`` or the full capture result."""
+        blob = (
+            snapshot["snapshot"]
+            if isinstance(snapshot, dict) and "snapshot" in snapshot
+            else snapshot
+        )
+        return await self._adapter.send_command("Snapshot.restore", {"snapshot": blob})
+
+    async def delete_snapshot(self, snapshot_id: str) -> Any:
+        """Delete a saved snapshot by id from the browser's local cache."""
+        return await self._adapter.send_command("Snapshot.delete", {"id": snapshot_id})
+
     # -------------------------------------------------------------------
     # Click Actions
     # -------------------------------------------------------------------

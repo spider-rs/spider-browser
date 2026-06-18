@@ -332,6 +332,50 @@ func (p *SpiderPage) Evaluate(expression string) (any, error) {
 	return p.adapter.Evaluate(expression)
 }
 
+// ---------------------------------------------------------------------
+// Session snapshots — persist a session and resume it later
+// ---------------------------------------------------------------------
+
+// SaveSnapshot saves the current session as a portable snapshot to persist and
+// restore later — cookies, local/session storage, the current URL, extra
+// request headers, and the viewport. Returns the snapshot blob; store it and
+// pass it back to RestoreSnapshot to resume. Pass an empty snapshotID to let
+// the server assign one.
+func (p *SpiderPage) SaveSnapshot(snapshotID string) (any, error) {
+	params := map[string]any{}
+	if snapshotID != "" {
+		params["id"] = snapshotID
+	}
+	resp, err := p.adapter.SendCommand("Snapshot.capture", params)
+	if err != nil {
+		return nil, err
+	}
+	// Return the blob directly for ergonomic round-tripping.
+	if m, ok := resp.(map[string]any); ok {
+		if blob, ok := m["snapshot"]; ok {
+			return blob, nil
+		}
+	}
+	return resp, nil
+}
+
+// RestoreSnapshot restores a previously saved session snapshot into this page.
+// Accepts the blob returned by SaveSnapshot or the full capture result.
+func (p *SpiderPage) RestoreSnapshot(snapshot any) (any, error) {
+	blob := snapshot
+	if m, ok := snapshot.(map[string]any); ok {
+		if inner, ok := m["snapshot"]; ok {
+			blob = inner
+		}
+	}
+	return p.adapter.SendCommand("Snapshot.restore", map[string]any{"snapshot": blob})
+}
+
+// DeleteSnapshot deletes a saved snapshot by id from the browser's local cache.
+func (p *SpiderPage) DeleteSnapshot(snapshotID string) (any, error) {
+	return p.adapter.SendCommand("Snapshot.delete", map[string]any{"id": snapshotID})
+}
+
 // --- Click Actions ---
 
 // Click clicks an element by CSS selector.
