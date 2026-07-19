@@ -11,6 +11,8 @@ import (
 // All standard browser automation methods (no LLM required).
 type SpiderPage struct {
 	adapter *ProtocolAdapter
+	emitter *EventEmitter
+	llm     LLMProvider
 }
 
 // NewSpiderPage creates a new page instance.
@@ -18,9 +20,45 @@ func NewSpiderPage(adapter *ProtocolAdapter) *SpiderPage {
 	return &SpiderPage{adapter: adapter}
 }
 
+// newSpiderPageWithAI creates a new page instance with the parent browser's
+// event emitter and LLM provider wired through so SpiderPage.Agent works
+// with zero extra config. Used internally by SpiderBrowser.Init.
+func newSpiderPageWithAI(adapter *ProtocolAdapter, emitter *EventEmitter, llm LLMProvider) *SpiderPage {
+	return &SpiderPage{adapter: adapter, emitter: emitter, llm: llm}
+}
+
 // SetAdapter replaces the adapter (used during browser switching).
 func (p *SpiderPage) SetAdapter(adapter *ProtocolAdapter) {
 	p.adapter = adapter
+}
+
+// Agent runs an autonomous agent scoped to THIS page/tab only.
+//
+// Unlike SpiderBrowser.NewAgent, the agent is instructed (and best-effort
+// guarded via an injected script) to stay in the current tab: no new
+// tabs/windows, target="_blank" links open in-place.
+//
+// Uses the browser's configured LLM by default; set opts.LLM to override
+// with a different provider for this run.
+func (p *SpiderPage) Agent(instruction string, opts *AgentOptions) (*AgentResult, error) {
+	o := AgentOptions{}
+	if opts != nil {
+		o = *opts
+	}
+	provider := p.llm
+	if o.LLM != nil {
+		provider = CreateProvider(*o.LLM)
+	}
+	if provider == nil {
+		return nil, ErrLLMNotConfigured
+	}
+	o.Scope = AgentScopePage
+	emitter := p.emitter
+	if emitter == nil {
+		emitter = NewEventEmitter()
+	}
+	agent := NewAgent(p.adapter, provider, emitter, &o)
+	return agent.Execute(instruction)
 }
 
 // --- Navigation ---

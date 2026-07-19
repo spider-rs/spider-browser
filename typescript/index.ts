@@ -24,7 +24,7 @@ export { createProvider, type LLMConfig, type LLMProvider, type LLMMessage } fro
 export { act } from './ai/act.js';
 export { observe, type ObserveResult } from './ai/observe.js';
 export { extract } from './ai/extract.js';
-export { Agent, type AgentOptions, type AgentResult, type AgentAction, type AgentPlan } from './ai/agent.js';
+export { Agent, type AgentOptions, type AgentResult, type AgentScope, type AgentAction, type AgentPlan } from './ai/agent.js';
 export { SYSTEM_PROMPT } from './ai/prompts.js';
 
 // Utils

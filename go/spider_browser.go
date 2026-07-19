@@ -219,7 +219,7 @@ func (sb *SpiderBrowser) Init() error {
 		return err
 	}
 
-	sb.page = NewSpiderPage(sb.adapter)
+	sb.page = newSpiderPageWithAI(sb.adapter, sb.emitter, sb.llmProvider)
 
 	if *sb.opts.SmartRetry {
 		sb.retryEngine = NewRetryEngine(RetryEngineOptions{

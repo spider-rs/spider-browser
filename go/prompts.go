@@ -90,6 +90,22 @@ Set "done": true when the task is fully complete. Set "done": false to continue.
 - Always include "label", "done", and "steps"
 - "steps" array can have multiple actions per round`
 
+// PageScopeAddendum is appended to SystemPrompt when the agent is scoped to
+// a single page/tab (see AgentScopePage). Canonical across all language
+// ports (TypeScript, Rust, Python, Go) — do not change it in one port
+// without updating the others.
+const PageScopeAddendum = `## Page Scope
+You are scoped to ONLY the current page/tab. You must not attempt to open new tabs or windows: window.open is disabled and any link with target="_blank" is rewritten to open in the current tab, so treat popup or new-window flows as blocked. Use in-page navigation only (Navigate, GoBack, GoForward, Reload) — every step of the task must happen within this single tab.`
+
+// buildSystemPrompt returns SystemPrompt unchanged for AgentScopeBrowser,
+// and SystemPrompt + PageScopeAddendum for AgentScopePage.
+func buildSystemPrompt(scope AgentScope) string {
+	if scope == AgentScopePage {
+		return SystemPrompt + "\n\n" + PageScopeAddendum
+	}
+	return SystemPrompt
+}
+
 // BuildUserMessage builds the user message for an agent round.
 func BuildUserMessage(url, html, screenshotB64, extraContext string) []LLMContentPart {
 	truncatedHTML := TruncateHTML(html, 12000)

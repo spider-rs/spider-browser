@@ -168,7 +168,7 @@ class SpiderBrowser:
         )
         await self._adapter.init()
 
-        self._page = SpiderPage(self._adapter)
+        self._page = SpiderPage(self._adapter, self._emitter, self._llm_provider)
 
         if self._opts.smart_retry:
             self._retry_engine = RetryEngine(

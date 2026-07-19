@@ -7,8 +7,13 @@ import json
 import time
 from typing import Any, Dict, List, Optional
 
+import dataclasses
+
 from .protocol.protocol_adapter import ProtocolAdapter
 from .utils.errors import BlockedError, TimeoutError
+from .events.emitter import SpiderEventEmitter
+from .ai.agent import Agent, AgentOptions, AgentResult
+from .ai.llm_provider import LLMConfig, LLMProvider, create_provider
 
 
 class SpiderPage:
@@ -20,8 +25,47 @@ class SpiderPage:
     through the ProtocolAdapter.
     """
 
-    def __init__(self, adapter: ProtocolAdapter) -> None:
+    def __init__(
+        self,
+        adapter: ProtocolAdapter,
+        emitter: Optional[SpiderEventEmitter] = None,
+        llm: Optional[LLMProvider] = None,
+    ) -> None:
         self._adapter = adapter
+        self._emitter = emitter
+        self._llm = llm
+
+    # -------------------------------------------------------------------
+    # AI
+    # -------------------------------------------------------------------
+
+    async def agent(
+        self,
+        instruction: str,
+        options: Optional[AgentOptions] = None,
+    ) -> AgentResult:
+        """Run an autonomous agent scoped to THIS page/tab only.
+
+        Unlike ``SpiderBrowser.agent()``, the agent is instructed (and
+        best-effort guarded via an injected script) to stay in the current
+        tab: no new tabs/windows, ``target="_blank"`` links open in-place.
+
+        Uses the browser's configured LLM by default; pass ``options.llm``
+        to override with a different provider for this run.
+        """
+        opts = options or AgentOptions()
+        provider = create_provider(opts.llm) if opts.llm else self._llm
+        if not provider:
+            raise RuntimeError(
+                "LLM not configured. Pass `llm` option to SpiderBrowserOptions for AI methods."
+            )
+        agent = Agent(
+            self._adapter,
+            provider,
+            self._emitter or SpiderEventEmitter(),
+            dataclasses.replace(opts, scope="page"),
+        )
+        return await agent.execute(instruction)
 
     # -------------------------------------------------------------------
     # Navigation

@@ -5,12 +5,18 @@
 //! through the [`ProtocolAdapter`].
 
 use crate::errors::{Result, SpiderError};
+use crate::events::SpiderEventEmitter;
 use crate::protocol::protocol_adapter::ProtocolAdapter;
 use arc_swap::ArcSwap;
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
+
+#[cfg(feature = "ai")]
+use crate::ai::agent::{Agent, AgentOptions, AgentResult, AgentScope};
+#[cfg(feature = "ai")]
+use crate::ai::llm_provider::LLMProvider;
 
 /// Browser tab abstraction with full automation API.
 ///
@@ -20,6 +26,9 @@ use tokio::time::sleep;
 /// browser rotation without dropping inflight references.
 pub struct SpiderPage {
     adapter: ArcSwap<ProtocolAdapter>,
+    emitter: SpiderEventEmitter,
+    #[cfg(feature = "ai")]
+    llm: Option<Arc<dyn LLMProvider>>,
 }
 
 /// Selector specification for [`SpiderPage::extract_fields`].
@@ -58,6 +67,9 @@ impl SpiderPage {
     pub fn new(adapter: ProtocolAdapter) -> Self {
         Self {
             adapter: ArcSwap::from_pointee(adapter),
+            emitter: SpiderEventEmitter::default(),
+            #[cfg(feature = "ai")]
+            llm: None,
         }
     }
 
@@ -65,6 +77,26 @@ impl SpiderPage {
     pub fn from_arc(adapter: Arc<ProtocolAdapter>) -> Self {
         Self {
             adapter: ArcSwap::from(adapter),
+            emitter: SpiderEventEmitter::default(),
+            #[cfg(feature = "ai")]
+            llm: None,
+        }
+    }
+
+    /// Create a new `SpiderPage` from an already-`Arc`-wrapped adapter, with
+    /// the parent browser's event emitter and LLM provider wired through so
+    /// [`SpiderPage::agent`] works with zero extra config. Used internally by
+    /// `SpiderBrowser::init`.
+    #[cfg(feature = "ai")]
+    pub(crate) fn from_arc_with(
+        adapter: Arc<ProtocolAdapter>,
+        emitter: SpiderEventEmitter,
+        llm: Option<Arc<dyn LLMProvider>>,
+    ) -> Self {
+        Self {
+            adapter: ArcSwap::from(adapter),
+            emitter,
+            llm,
         }
     }
 
@@ -72,6 +104,42 @@ impl SpiderPage {
     #[inline]
     pub(crate) fn adapter(&self) -> arc_swap::Guard<Arc<ProtocolAdapter>> {
         self.adapter.load()
+    }
+
+    // =================================================================
+    // AI
+    // =================================================================
+
+    /// Run an autonomous agent scoped to THIS page/tab only.
+    ///
+    /// Unlike `SpiderBrowser::agent()`, the agent is instructed (and
+    /// best-effort guarded via an injected script) to stay in the current
+    /// tab: no new tabs/windows, `target="_blank"` links open in-place.
+    ///
+    /// Uses the browser's configured LLM by default; pass `options.llm` to
+    /// override with a different provider for this run.
+    #[cfg(feature = "ai")]
+    pub async fn agent(
+        &self,
+        instruction: &str,
+        options: Option<AgentOptions>,
+    ) -> Result<AgentResult> {
+        let mut opts = options.unwrap_or_default();
+        let provider: Arc<dyn LLMProvider> = if let Some(config) = opts.llm.take() {
+            Arc::from(crate::ai::llm_provider::create_provider(config))
+        } else {
+            self.llm.clone().ok_or_else(|| {
+                SpiderError::Llm(
+                    "LLM not configured. Pass llm option to SpiderBrowser for AI methods.".into(),
+                )
+            })?
+        };
+        // Clone the Arc out of the ArcSwap snapshot before any `.await` --
+        // holding a `Guard` across an await point is unsound with arc-swap.
+        let adapter = self.adapter.load_full();
+        opts.scope = AgentScope::Page;
+        let agent = Agent::new(&adapter, provider.as_ref(), &self.emitter, Some(opts));
+        Ok(agent.execute(instruction).await)
     }
 
     // =================================================================

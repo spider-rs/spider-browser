@@ -99,6 +99,15 @@ let elements = browser.observe(None).await?;
 
 // Autonomous agent
 let result = browser.agent(None).execute("Find the cheapest flight to Tokyo").await?;
+
+// Page-scoped agent — stays in the current tab. The system prompt gains a
+// page-scope addendum and a best-effort guardrail blocks window.open /
+// target="_blank" popups. Uses the browser's configured LLM by default;
+// set `options.llm` to override per call.
+let scoped = browser
+    .page()
+    .agent("Add the first product to the cart", None)
+    .await?;
 ```
 
 ## Smart Retry

@@ -5,9 +5,12 @@ System prompt for the web automation agent.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Union
 
 from ..utils.html import truncate_html
+
+if TYPE_CHECKING:
+    from .agent import AgentScope
 
 SYSTEM_PROMPT = """\
 You are an expert web automation agent. You interact with any webpage to solve challenges, fill forms, navigate sites, extract data, and complete complex multi-step tasks.
@@ -115,6 +118,25 @@ Set "done": true when the task is fully complete. Set "done": false to continue.
 - JSON only, no markdown or prose
 - Always include "label", "done", and "steps"
 - "steps" array can have multiple actions per round"""
+
+
+# Addendum appended to SYSTEM_PROMPT when the agent is scoped to a single page.
+# Canonical across all language ports (TypeScript, Rust, Python, Go) — do not
+# change it in one port without updating the others.
+PAGE_SCOPE_ADDENDUM: str = """\
+## Page Scope
+You are scoped to ONLY the current page/tab. You must not attempt to open new tabs or windows: window.open is disabled and any link with target="_blank" is rewritten to open in the current tab, so treat popup or new-window flows as blocked. Use in-page navigation only (Navigate, GoBack, GoForward, Reload) — every step of the task must happen within this single tab."""
+
+
+def build_system_prompt(scope: "AgentScope") -> str:
+    """Build the system prompt for the given agent scope.
+
+    - "browser" -> SYSTEM_PROMPT unchanged (full browser control).
+    - "page"    -> SYSTEM_PROMPT + PAGE_SCOPE_ADDENDUM (single-tab constraint).
+    """
+    if scope == "page":
+        return SYSTEM_PROMPT + "\n\n" + PAGE_SCOPE_ADDENDUM
+    return SYSTEM_PROMPT
 
 
 def build_user_message(

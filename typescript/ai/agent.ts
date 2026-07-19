@@ -1,7 +1,7 @@
 import type { ProtocolAdapter } from '../protocol/protocol-adapter.js';
 import type { LLMProvider } from './llm-provider.js';
 import type { SpiderEventEmitter } from '../events/emitter.js';
-import { SYSTEM_PROMPT, buildUserMessage } from './prompts.js';
+import { buildSystemPrompt, buildUserMessage } from './prompts.js';
 import { getKeyParams } from '../protocol/types.js';
 import { logger } from '../utils/logger.js';
 import { TimeoutError } from '../utils/errors.js';
@@ -62,6 +62,52 @@ export interface AgentPlan {
   memory_ops?: unknown[];
 }
 
+/**
+ * Scope of an agent run.
+ * - 'browser' — full browser control (default; identical to previous behavior).
+ * - 'page'    — restricted to the current page/tab: the system prompt gains a
+ *               page-scope addendum and a best-effort guardrail script blocks
+ *               window.open / target="_blank" popups.
+ */
+export type AgentScope = 'page' | 'browser';
+
+/**
+ * Best-effort in-page guardrail for page-scoped agents.
+ *
+ * Idempotent: safe to evaluate repeatedly and to install as a preload script.
+ * Overrides window.open to navigate the current tab instead of opening a new
+ * one, rewrites a[target="_blank"] to target="_self", and keeps re-applying
+ * the rewrite to dynamically added links via a MutationObserver.
+ *
+ * NOTE: This is a best-effort guardrail, NOT a security boundary — pages can
+ * still escape it (e.g. via iframes or captured native references). It only
+ * steers the agent away from multi-tab flows.
+ *
+ * NOTE: This script is canonical across all language ports (TypeScript, Rust,
+ * Python, Go) — do not change it in one port without updating the others.
+ */
+export const GUARDRAIL_JS = `\
+(function () {
+  if (window.__spiderPageScopeGuard) return;
+  window.__spiderPageScopeGuard = true;
+  try {
+    window.open = function (url) {
+      if (url) { try { window.location.href = String(url); } catch (e) {} }
+      return null;
+    };
+  } catch (e) {}
+  var retarget = function () {
+    try {
+      var links = document.querySelectorAll('a[target="_blank"]');
+      for (var i = 0; i < links.length; i++) { links[i].target = '_self'; }
+    } catch (e) {}
+  };
+  retarget();
+  try {
+    new MutationObserver(retarget).observe(document, { childList: true, subtree: true });
+  } catch (e) {}
+})();`;
+
 export interface AgentOptions {
   /** Max automation rounds (default: 30). */
   maxRounds: number;
@@ -69,6 +115,8 @@ export interface AgentOptions {
   stepDelayMs: number;
   /** Extra context/instruction for each round. */
   instruction?: string;
+  /** Agent scope (default behavior when unset: 'browser'). */
+  scope?: AgentScope;
 }
 
 export interface AgentResult {
@@ -94,7 +142,7 @@ export class Agent {
   private adapter: ProtocolAdapter;
   private llm: LLMProvider;
   private emitter: SpiderEventEmitter;
-  private opts: Required<Pick<AgentOptions, 'maxRounds' | 'stepDelayMs'>> & Pick<AgentOptions, 'instruction'>;
+  private opts: Required<Pick<AgentOptions, 'maxRounds' | 'stepDelayMs'>> & Pick<AgentOptions, 'instruction' | 'scope'>;
 
   constructor(
     adapter: ProtocolAdapter,
@@ -109,6 +157,7 @@ export class Agent {
       maxRounds: options?.maxRounds ?? 30,
       stepDelayMs: options?.stepDelayMs ?? 1500,
       instruction: options?.instruction,
+      scope: options?.scope,
     };
   }
 
@@ -119,10 +168,46 @@ export class Agent {
     let extracted: unknown = undefined;
     let lastLabel = '';
 
+    const scope: AgentScope = this.opts.scope ?? 'browser';
+    const systemPrompt = buildSystemPrompt(scope);
+
     // Small initial delay for page to render
     await sleep(500);
 
+    // Page-scope guardrail: best-effort only, NOT a security boundary.
+    // Apply once to the current document, then try to install it as a
+    // persistent preload script (CDP Page.addScriptToEvaluateOnNewDocument)
+    // so it survives same-tab navigations. If persistent install fails
+    // (e.g. BiDi, which doesn't support it through our adapter), fall back
+    // to re-evaluating the idempotent snippet at the start of every round.
+    let guardrailPersistent = false;
+    if (scope === 'page') {
+      try {
+        await this.adapter.evaluate(GUARDRAIL_JS);
+      } catch {
+        // best-effort
+      }
+      try {
+        await this.adapter.sendCommand('Page.addScriptToEvaluateOnNewDocument', {
+          source: GUARDRAIL_JS,
+        });
+        guardrailPersistent = true;
+      } catch {
+        guardrailPersistent = false;
+      }
+    }
+
     for (let round = 0; round < this.opts.maxRounds; round++) {
+      // Re-apply page-scope guardrail each round when no persistent preload
+      // script could be installed (idempotent, best-effort).
+      if (scope === 'page' && !guardrailPersistent) {
+        try {
+          await this.adapter.evaluate(GUARDRAIL_JS);
+        } catch {
+          // best-effort
+        }
+      }
+
       // 1. Capture screenshot
       let screenshot: string;
       try {
@@ -157,7 +242,7 @@ export class Agent {
       let plan: AgentPlan;
       try {
         plan = await this.llm.chatJSON<AgentPlan>([
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: systemPrompt },
           {
             role: 'user',
             content: buildUserMessage(url, html, screenshot, context),

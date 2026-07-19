@@ -113,7 +113,7 @@ pub struct SpiderBrowser {
     emitter: SpiderEventEmitter,
     current_url: ArcSwap<Option<String>>,
     #[cfg(feature = "ai")]
-    llm_provider: Option<Box<dyn LLMProvider>>,
+    llm_provider: Option<Arc<dyn LLMProvider>>,
     msg_send_tx: Option<mpsc::UnboundedSender<String>>,
 }
 
@@ -140,8 +140,8 @@ impl SpiderBrowser {
         };
 
         #[cfg(feature = "ai")]
-        let llm_provider: Option<Box<dyn LLMProvider>> =
-            options.llm.map(|config| create_provider(config));
+        let llm_provider: Option<Arc<dyn LLMProvider>> =
+            options.llm.map(|config| Arc::from(create_provider(config)));
 
         Self {
             opts: resolved,
@@ -260,6 +260,13 @@ impl SpiderBrowser {
 
         // Wrap adapter in Arc for sharing between page and AI methods
         let adapter = Arc::new(adapter);
+        #[cfg(feature = "ai")]
+        let page = SpiderPage::from_arc_with(
+            Arc::clone(&adapter),
+            self.emitter.clone(),
+            self.llm_provider.clone(),
+        );
+        #[cfg(not(feature = "ai"))]
         let page = SpiderPage::from_arc(Arc::clone(&adapter));
         let page = Arc::new(page);
 
@@ -353,7 +360,7 @@ impl SpiderBrowser {
     }
 
     #[cfg(feature = "ai")]
-    fn require_llm(&self) -> Result<&Box<dyn LLMProvider>> {
+    fn require_llm(&self) -> Result<&Arc<dyn LLMProvider>> {
         self.llm_provider.as_ref().ok_or_else(|| {
             SpiderError::Llm(
                 "LLM not configured. Pass llm option to SpiderBrowser for AI methods.".into(),

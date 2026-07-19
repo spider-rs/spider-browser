@@ -207,7 +207,7 @@ export class SpiderBrowser {
     });
     await this.adapter.init();
 
-    this._page = new SpiderPage(this.adapter);
+    this._page = new SpiderPage(this.adapter, this.emitter, this.llmProvider ?? undefined);
 
     if (this.opts.smartRetry) {
       const retryOpts: RetryOptions = {

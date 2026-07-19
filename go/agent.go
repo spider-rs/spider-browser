@@ -6,6 +6,56 @@ import (
 	"time"
 )
 
+// AgentScope is the scope of an agent run.
+//
+//   - AgentScopeBrowser — full browser control (default; identical to prior
+//     behavior).
+//   - AgentScopePage — restricted to the current page/tab: the system
+//     prompt gains a page-scope addendum and a best-effort guardrail script
+//     blocks window.open / target="_blank" popups.
+type AgentScope string
+
+const (
+	AgentScopeBrowser AgentScope = "browser"
+	AgentScopePage    AgentScope = "page"
+)
+
+// GuardrailJS is a best-effort in-page guardrail for page-scoped agents.
+//
+// Idempotent: safe to evaluate repeatedly and to install as a preload
+// script. Overrides window.open to navigate the current tab instead of
+// opening a new one, rewrites a[target="_blank"] to target="_self", and
+// keeps re-applying the rewrite to dynamically added links via a
+// MutationObserver.
+//
+// NOTE: This is a best-effort guardrail, NOT a security boundary — pages
+// can still escape it (e.g. via iframes or captured native references). It
+// only steers the agent away from multi-tab flows.
+//
+// NOTE: This script is canonical across all language ports (TypeScript,
+// Rust, Python, Go) — do not change it in one port without updating the
+// others.
+const GuardrailJS = `(function () {
+  if (window.__spiderPageScopeGuard) return;
+  window.__spiderPageScopeGuard = true;
+  try {
+    window.open = function (url) {
+      if (url) { try { window.location.href = String(url); } catch (e) {} }
+      return null;
+    };
+  } catch (e) {}
+  var retarget = function () {
+    try {
+      var links = document.querySelectorAll('a[target="_blank"]');
+      for (var i = 0; i < links.length; i++) { links[i].target = '_self'; }
+    } catch (e) {}
+  };
+  retarget();
+  try {
+    new MutationObserver(retarget).observe(document, { childList: true, subtree: true });
+  } catch (e) {}
+})();`
+
 // AgentOptions configures an autonomous agent.
 type AgentOptions struct {
 	// MaxRounds is the max automation rounds (default: 30).
@@ -14,6 +64,10 @@ type AgentOptions struct {
 	StepDelayMs int
 	// Instruction is extra context for each round.
 	Instruction string
+	// Scope of this agent run (default: AgentScopeBrowser).
+	Scope AgentScope
+	// LLM is a per-run LLM override (used by SpiderPage.Agent()).
+	LLM *LLMConfig
 }
 
 // AgentResult is the result of an agent execution.
@@ -54,6 +108,7 @@ func NewAgent(adapter *ProtocolAdapter, llm LLMProvider, emitter *EventEmitter, 
 			o.StepDelayMs = opts.StepDelayMs
 		}
 		o.Instruction = opts.Instruction
+		o.Scope = opts.Scope
 	}
 	return &Agent{
 		adapter: adapter,
@@ -70,7 +125,29 @@ func (a *Agent) Execute(instruction string) (*AgentResult, error) {
 
 	time.Sleep(500 * time.Millisecond)
 
+	systemPrompt := buildSystemPrompt(a.opts.Scope)
+
+	// Page-scope guardrail: best-effort only, NOT a security boundary.
+	// Apply once to the current document, then try to install it as a
+	// persistent preload script (CDP Page.addScriptToEvaluateOnNewDocument)
+	// so it survives same-tab navigations. If persistent install fails
+	// (e.g. BiDi, which doesn't support it through our adapter), fall back
+	// to re-evaluating the idempotent snippet at the start of every round.
+	guardrailPersistent := false
+	if a.opts.Scope == AgentScopePage {
+		a.adapter.Evaluate(GuardrailJS)
+		_, err := a.adapter.SendCommand("Page.addScriptToEvaluateOnNewDocument", map[string]any{
+			"source": GuardrailJS,
+		})
+		guardrailPersistent = err == nil
+	}
+
 	for round := 0; round < a.opts.MaxRounds; round++ {
+		// Re-apply page-scope guardrail each round when no persistent
+		// preload script could be installed (idempotent, best-effort).
+		if a.opts.Scope == AgentScopePage && !guardrailPersistent {
+			a.adapter.Evaluate(GuardrailJS)
+		}
 		// 1. Capture screenshot
 		screenshot, err := a.adapter.CaptureScreenshot()
 		if err != nil {
@@ -97,7 +174,7 @@ func (a *Agent) Execute(instruction string) (*AgentResult, error) {
 
 		var plan AgentPlan
 		err = a.llm.ChatJSON([]LLMMessage{
-			{Role: "system", Content: SystemPrompt},
+			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: BuildUserMessage(url, html, screenshot, context)},
 		}, &plan)
 		if err != nil {

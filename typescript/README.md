@@ -98,6 +98,15 @@ const elements = await browser.observe();
 
 // Autonomous agent
 const result = await browser.agent({ maxRounds: 20 }).execute('Find the cheapest flight to Tokyo');
+
+// Page-scoped agent — stays in the current tab. The system prompt gains a
+// page-scope addendum and a best-effort guardrail blocks window.open /
+// target="_blank" popups. Uses the browser's configured LLM by default;
+// pass `llm` to override per call.
+const scoped = await browser.page.agent('Add the first product to the cart', {
+  maxRounds: 10,
+  // llm: { provider: 'anthropic', model: 'claude-sonnet-4-5', apiKey: '...' },
+});
 ```
 
 ## Smart Retry

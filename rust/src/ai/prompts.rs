@@ -2,7 +2,9 @@
 //!
 //! Ported VERBATIM from TypeScript `ai/prompts.ts`.
 
+use crate::ai::agent::AgentScope;
 use crate::ai::llm_provider::{ImageUrlValue, LLMContentPart};
+use std::borrow::Cow;
 
 /// System prompt for the web automation agent.
 pub const SYSTEM_PROMPT: &str = "\
@@ -115,6 +117,22 @@ Set \"done\": true when the task is fully complete. Set \"done\": false to conti
 - Always include \"label\", \"done\", and \"steps\"
 - \"steps\" array can have multiple actions per round";
 
+/// Addendum appended to [`SYSTEM_PROMPT`] when the agent is scoped to a
+/// single page/tab (see [`AgentScope::Page`]).
+pub const PAGE_SCOPE_ADDENDUM: &str = r#"## Page Scope
+You are scoped to ONLY the current page/tab. You must not attempt to open new tabs or windows: window.open is disabled and any link with target="_blank" is rewritten to open in the current tab, so treat popup or new-window flows as blocked. Use in-page navigation only (Navigate, GoBack, GoForward, Reload) — every step of the task must happen within this single tab."#;
+
+/// Build the system prompt for the given agent scope.
+///
+/// Returns [`SYSTEM_PROMPT`] unchanged for [`AgentScope::Browser`], and
+/// `SYSTEM_PROMPT` + [`PAGE_SCOPE_ADDENDUM`] for [`AgentScope::Page`].
+pub fn build_system_prompt(scope: AgentScope) -> Cow<'static, str> {
+    match scope {
+        AgentScope::Browser => Cow::Borrowed(SYSTEM_PROMPT),
+        AgentScope::Page => Cow::Owned(format!("{}\n\n{}", SYSTEM_PROMPT, PAGE_SCOPE_ADDENDUM)),
+    }
+}
+
 /// Build the user message for an agent round.
 ///
 /// Mirrors `llm.rs call_vision()` user content format.
@@ -170,6 +188,19 @@ mod tests {
         let result = truncate_html(html, 25);
         assert!(result.ends_with('>'));
         assert!(result.len() <= 25);
+    }
+
+    #[test]
+    fn build_system_prompt_browser_scope_is_unchanged() {
+        assert_eq!(build_system_prompt(AgentScope::Browser), SYSTEM_PROMPT);
+    }
+
+    #[test]
+    fn build_system_prompt_page_scope_appends_addendum() {
+        let prompt = build_system_prompt(AgentScope::Page);
+        assert!(prompt.starts_with(SYSTEM_PROMPT));
+        assert!(prompt.contains(PAGE_SCOPE_ADDENDUM));
+        assert!(prompt.contains("Page Scope"));
     }
 
     #[test]

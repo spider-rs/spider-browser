@@ -1,5 +1,8 @@
 import type { ProtocolAdapter } from './protocol/protocol-adapter.js';
 import { BlockedError, NavigationError, TimeoutError } from './utils/errors.js';
+import { SpiderEventEmitter } from './events/emitter.js';
+import { Agent, type AgentOptions, type AgentResult } from './ai/agent.js';
+import { createProvider, type LLMConfig, type LLMProvider } from './ai/llm-provider.js';
 
 /** Options for `page.scrape()`. Provide one of `fields`, `domain`, or `slug`. */
 export interface ScrapeOptions {
@@ -22,7 +25,43 @@ export interface ScrapeOptions {
  */
 export class SpiderPage {
   /** @internal */
-  constructor(private adapter: ProtocolAdapter) {}
+  constructor(
+    private adapter: ProtocolAdapter,
+    private emitter?: SpiderEventEmitter,
+    private llm?: LLMProvider,
+  ) {}
+
+  // -------------------------------------------------------------------
+  // AI
+  // -------------------------------------------------------------------
+
+  /**
+   * Run an autonomous agent scoped to THIS page/tab only.
+   *
+   * Unlike `browser.agent()`, the agent is instructed (and best-effort
+   * guarded via an injected script) to stay in the current tab: no new
+   * tabs/windows, `target="_blank"` links open in-place.
+   *
+   * Uses the browser's configured LLM by default; pass `options.llm` to
+   * override with a different provider for this run.
+   */
+  async agent(
+    instruction: string,
+    options?: Partial<Omit<AgentOptions, 'scope'>> & { llm?: LLMConfig },
+  ): Promise<AgentResult> {
+    const { llm: llmConfig, ...agentOptions } = options ?? {};
+    const provider = llmConfig ? createProvider(llmConfig) : this.llm;
+    if (!provider) {
+      throw new Error(
+        'LLM not configured. Pass `llm` option to SpiderBrowser constructor for AI methods.',
+      );
+    }
+    const agent = new Agent(this.adapter, provider, this.emitter ?? new SpiderEventEmitter(), {
+      ...agentOptions,
+      scope: 'page',
+    });
+    return agent.execute(instruction);
+  }
 
   // -------------------------------------------------------------------
   // Navigation

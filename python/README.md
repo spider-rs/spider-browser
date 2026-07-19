@@ -105,6 +105,15 @@ async with SpiderBrowser(opts) as browser:
 
     # Autonomous agent
     result = await browser.agent(AgentOptions(max_rounds=20)).execute("Find the cheapest flight to Tokyo")
+
+    # Page-scoped agent — stays in the current tab. The system prompt gains a
+    # page-scope addendum and a best-effort guardrail blocks window.open /
+    # target="_blank" popups. Uses the browser's configured LLM by default;
+    # pass `options.llm` to override per call.
+    scoped = await browser.page.agent(
+        "Add the first product to the cart",
+        AgentOptions(max_rounds=10),
+    )
 ```
 
 ## Smart Retry

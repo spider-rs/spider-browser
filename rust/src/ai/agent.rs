@@ -4,8 +4,8 @@
 //!
 //! Loop: screenshot -> HTML -> LLM -> parse plan -> execute actions -> repeat.
 
-use crate::ai::llm_provider::{LLMContent, LLMMessage, LLMProvider, LLMRole};
-use crate::ai::prompts::{build_user_message, SYSTEM_PROMPT};
+use crate::ai::llm_provider::{LLMConfig, LLMContent, LLMMessage, LLMProvider, LLMRole};
+use crate::ai::prompts::{build_system_prompt, build_user_message};
 use crate::errors::{Result, SpiderError};
 use crate::events::SpiderEventEmitter;
 use crate::protocol::protocol_adapter::ProtocolAdapter;
@@ -13,6 +13,56 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::time::{sleep, Duration};
 use tracing::{info, warn};
+
+/// Scope of an agent run.
+///
+/// - [`AgentScope::Browser`] — full browser control (default; identical to
+///   prior behavior).
+/// - [`AgentScope::Page`] — restricted to the current page/tab: the system
+///   prompt gains a page-scope addendum and a best-effort guardrail script
+///   blocks `window.open` / `target="_blank"` popups.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AgentScope {
+    #[default]
+    Browser,
+    Page,
+}
+
+/// Best-effort in-page guardrail for page-scoped agents.
+///
+/// Idempotent: safe to evaluate repeatedly and to install as a preload
+/// script. Overrides `window.open` to navigate the current tab instead of
+/// opening a new one, rewrites `a[target="_blank"]` to `target="_self"`, and
+/// keeps re-applying the rewrite to dynamically added links via a
+/// `MutationObserver`.
+///
+/// NOTE: This is a best-effort guardrail, NOT a security boundary -- pages
+/// can still escape it (e.g. via iframes or captured native references). It
+/// only steers the agent away from multi-tab flows.
+///
+/// NOTE: This script is canonical across all language ports (TypeScript,
+/// Rust, Python, Go) -- do not change it in one port without updating the
+/// others.
+pub const GUARDRAIL_JS: &str = r#"(function () {
+  if (window.__spiderPageScopeGuard) return;
+  window.__spiderPageScopeGuard = true;
+  try {
+    window.open = function (url) {
+      if (url) { try { window.location.href = String(url); } catch (e) {} }
+      return null;
+    };
+  } catch (e) {}
+  var retarget = function () {
+    try {
+      var links = document.querySelectorAll('a[target="_blank"]');
+      for (var i = 0; i < links.length; i++) { links[i].target = '_self'; }
+    } catch (e) {}
+  };
+  retarget();
+  try {
+    new MutationObserver(retarget).observe(document, { childList: true, subtree: true });
+  } catch (e) {}
+})();"#;
 
 // -------------------------------------------------------------------
 // Action types (mirrors actions.rs AgentAction enum)
@@ -113,6 +163,12 @@ pub struct AgentOptions {
     pub step_delay_ms: u64,
     /// Extra context/instruction for each round.
     pub instruction: Option<String>,
+    /// Scope of this agent run (default: [`AgentScope::Browser`]).
+    pub scope: AgentScope,
+    /// Per-run LLM override (used by `SpiderPage::agent()`; ignored by
+    /// `SpiderBrowser::agent()`, which is constructed with a provider
+    /// already resolved).
+    pub llm: Option<LLMConfig>,
 }
 
 impl Default for AgentOptions {
@@ -121,6 +177,8 @@ impl Default for AgentOptions {
             max_rounds: 30,
             step_delay_ms: 1500,
             instruction: None,
+            scope: AgentScope::default(),
+            llm: None,
         }
     }
 }
@@ -147,6 +205,7 @@ pub struct Agent<'a> {
     emitter: &'a SpiderEventEmitter,
     max_rounds: u32,
     step_delay_ms: u64,
+    scope: AgentScope,
 }
 
 impl<'a> Agent<'a> {
@@ -163,6 +222,7 @@ impl<'a> Agent<'a> {
             emitter,
             max_rounds: opts.max_rounds,
             step_delay_ms: opts.step_delay_ms,
+            scope: opts.scope,
         }
     }
 
@@ -174,7 +234,34 @@ impl<'a> Agent<'a> {
         // Small initial delay for page to render
         sleep(Duration::from_millis(500)).await;
 
+        let system_prompt = build_system_prompt(self.scope);
+
+        // Page-scope guardrail: best-effort only, NOT a security boundary.
+        // Apply once to the current document, then try to install it as a
+        // persistent preload script (CDP Page.addScriptToEvaluateOnNewDocument)
+        // so it survives same-tab navigations. If persistent install fails
+        // (e.g. BiDi, which doesn't support it through our adapter), fall
+        // back to re-evaluating the idempotent snippet at the start of every
+        // round.
+        let mut guardrail_persistent = false;
+        if self.scope == AgentScope::Page {
+            let _ = self.adapter.evaluate(GUARDRAIL_JS).await;
+            guardrail_persistent = self
+                .adapter
+                .send_command(
+                    "Page.addScriptToEvaluateOnNewDocument",
+                    json!({ "source": GUARDRAIL_JS }),
+                )
+                .await
+                .is_ok();
+        }
+
         for round in 0..self.max_rounds {
+            // Re-apply page-scope guardrail each round when no persistent
+            // preload script could be installed (idempotent, best-effort).
+            if self.scope == AgentScope::Page && !guardrail_persistent {
+                let _ = self.adapter.evaluate(GUARDRAIL_JS).await;
+            }
             // 1. Capture screenshot
             let screenshot = match self.adapter.capture_screenshot().await {
                 Ok(s) => s,
@@ -218,7 +305,7 @@ impl<'a> Agent<'a> {
             );
 
             let messages = vec![
-                LLMMessage::system(SYSTEM_PROMPT),
+                LLMMessage::system(system_prompt.as_ref()),
                 LLMMessage {
                     role: LLMRole::User,
                     content: LLMContent::Parts(build_user_message(
@@ -636,4 +723,26 @@ async fn wait_for_element(adapter: &ProtocolAdapter, selector: &str, timeout_ms:
     Err(SpiderError::Timeout(format!(
         "Timeout waiting for element: {selector}"
     )))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn agent_scope_default_is_browser() {
+        assert_eq!(AgentScope::default(), AgentScope::Browser);
+    }
+
+    #[test]
+    fn agent_options_default_scope_is_browser() {
+        assert_eq!(AgentOptions::default().scope, AgentScope::Browser);
+    }
+
+    #[test]
+    fn guardrail_js_is_idempotent_guarded() {
+        assert!(GUARDRAIL_JS.contains("__spiderPageScopeGuard"));
+        assert!(GUARDRAIL_JS.contains("window.open"));
+        assert!(GUARDRAIL_JS.contains("target=\"_blank\""));
+    }
 }
