@@ -187,6 +187,32 @@ const buttons = await browser.observe("Find all Add to Cart buttons");
 // Returns: [{ selector, tag, text, ariaLabel, rect, score, ... }]
 ```
 
+### scrape — structured data with nothing declared
+
+Server-side. No LLM config on your end, and no selectors, schema, or prompt.
+Spider reads the rendered page, works out what it is, and names the fields
+itself.
+
+```typescript
+await page.goto("https://www.rollingstone.com/music/music-news/");
+
+const data = await page.scrape();
+// { headline: "...", author: "...", published_at: "...", summary: "..." }
+```
+
+Narrow it when you want determinism:
+
+```typescript
+await page.scrape({ fields: { title: "h1", price: ".price" } }); // your CSS
+await page.scrape({ domain: "amazon.com" });                     // built-in pattern
+await page.scrape({ slug: "amazon-scraper" });                   // specific pattern
+```
+
+A `domain` or `slug` with no built-in pattern falls through to the zero-config
+path rather than returning nothing. That path is AI-only, so it needs an AI
+Studio subscription and a Spider connection (not a raw CDP endpoint). `fields`
+works everywhere.
+
 ### extract — pull structured data from the page
 
 ```typescript
@@ -294,7 +320,7 @@ browser.on("captcha.detected", ({ types, url }) => {
 ## Gotchas
 
 1. **You must call `init()` before using `page` or any methods.** The constructor does not connect — `init()` opens the WebSocket and allocates a cloud browser.
-2. **AI methods (`act`, `observe` with instruction, `extract`, `agent`) require an `llm` config.** They will throw `LLMError` if no LLM is configured. `observe()` without an instruction works without LLM (pure DOM traversal).
+2. **AI methods (`act`, `observe` with instruction, `extract`, `agent`) require an `llm` config.** They will throw `LLMError` if no LLM is configured. `observe()` without an instruction works without LLM (pure DOM traversal). `scrape()` is the exception among AI-backed methods: its model runs server-side, so it needs no `llm` config of yours.
 3. **Smart retry is on by default.** `goto()` on `SpiderBrowser` wraps navigation with retry logic. If you want raw navigation without retries, use `browser.page.goto()` directly.
 4. **`content()` waits for network idle.** It polls for DOM stability and network quiet (default 8 s). Use `rawContent()` for immediate HTML or `gotoFast()` + `rawContent()` for speed.
 5. **Stealth level 0 means auto-escalate.** Setting `stealth: 0` (the default) doesn't mean "no stealth" — it means the retry engine will start low and escalate automatically on blocked errors.

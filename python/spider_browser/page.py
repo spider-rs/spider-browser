@@ -675,6 +675,66 @@ class SpiderPage:
             return json.loads(result)
         return {}
 
+    async def scrape(
+        self,
+        fields: Optional[Dict[str, Any]] = None,
+        domain: Optional[str] = None,
+        slug: Optional[str] = None,
+        ai_fallback: bool = True,
+    ) -> Dict[str, Optional[str]]:
+        """Scrape structured data from the current page.
+
+        Server-side CSS extraction with an AI fallback for fields selectors
+        can't resolve. Four modes:
+
+        1. Nothing declared, AI names the fields itself from the page
+        2. ``fields`` with CSS selectors
+        3. ``domain`` (e.g. "amazon.com"), uses built-in patterns
+        4. ``slug`` (e.g. "amazon-scraper"), a specific built-in pattern
+
+        A ``domain`` or ``slug`` with no built-in pattern falls through to
+        mode 1 rather than returning nothing.
+
+        Falls back to client-side ``extract_fields`` when the server has no
+        ``Spider.scrape`` (e.g. a raw CDP endpoint). Mode 1 needs the server,
+        since the AI runs there.
+
+        Example::
+
+            # Zero config: AI picks the fields
+            data = await page.scrape()
+
+            # Custom selectors
+            data = await page.scrape(fields={"title": "#productTitle"})
+
+            # Built-in pattern
+            data = await page.scrape(domain="amazon.com")
+        """
+        params: Dict[str, Any] = {"aiFallback": ai_fallback}
+        if fields is not None:
+            params["fields"] = fields
+        if domain is not None:
+            params["domain"] = domain
+        if slug is not None:
+            params["slug"] = slug
+
+        try:
+            resp = await self._adapter.send_command("Spider.scrape", params)
+            if isinstance(resp, dict) and "error" not in resp:
+                return resp
+        except Exception:
+            # Server doesn't support Spider.scrape, fall back to client-side
+            pass
+
+        if fields is not None:
+            return await self.extract_fields(fields)
+
+        raise RuntimeError(
+            "scrape() without `fields` needs server-side AI extraction, which this "
+            "connection does not support. Connect through Spider (not a raw CDP "
+            "endpoint), or pass `fields` with CSS selectors."
+        )
+
     # -------------------------------------------------------------------
     # Internals
     # -------------------------------------------------------------------

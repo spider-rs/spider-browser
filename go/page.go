@@ -893,6 +893,86 @@ func (p *SpiderPage) ExtractFields(fields map[string]FieldSpec) (map[string]stri
 	return result, nil
 }
 
+// ScrapeOptions configures Scrape. The zero value declares nothing, which is
+// the zero-config mode: the AI infers the fields from the page itself.
+type ScrapeOptions struct {
+	// Fields holds your own CSS selectors. Nil lets the AI choose the fields.
+	Fields map[string]FieldSpec
+	// Domain is a target domain for built-in pattern lookup (e.g. "amazon.com").
+	Domain string
+	// Slug selects a specific built-in pattern (e.g. "amazon-scraper").
+	Slug string
+	// DisableAI turns off AI resolution of fields CSS can't reach. The
+	// zero-config mode requires AI, so it fails when this is set.
+	DisableAI bool
+}
+
+// Scrape extracts structured data from the current page.
+//
+// Server-side CSS extraction with an AI fallback for fields selectors can't
+// resolve. Four modes, selected by opts:
+//
+//  1. Nothing declared, AI names the fields itself from the page
+//  2. Fields, your own CSS selectors
+//  3. Domain, built-in patterns
+//  4. Slug, a specific built-in pattern
+//
+// A Domain or Slug with no built-in pattern falls through to mode 1 rather
+// than returning nothing.
+//
+// Falls back to client-side ExtractFields when the server has no
+// Spider.scrape (e.g. a raw CDP endpoint). Mode 1 needs the server, since the
+// AI runs there.
+func (p *SpiderPage) Scrape(opts ScrapeOptions) (map[string]string, error) {
+	params := map[string]any{"aiFallback": !opts.DisableAI}
+
+	if opts.Fields != nil {
+		fields := make(map[string]any, len(opts.Fields))
+		for key, spec := range opts.Fields {
+			if spec.Attribute == "" {
+				fields[key] = spec.Selector
+			} else {
+				fields[key] = map[string]string{
+					"selector":  spec.Selector,
+					"attribute": spec.Attribute,
+				}
+			}
+		}
+		params["fields"] = fields
+	}
+	if opts.Domain != "" {
+		params["domain"] = opts.Domain
+	}
+	if opts.Slug != "" {
+		params["slug"] = opts.Slug
+	}
+
+	// Try server-side Spider.scrape first (browser_server with extract crate).
+	if resp, err := p.adapter.SendCommand("Spider.scrape", params); err == nil {
+		if obj, ok := resp.(map[string]any); ok {
+			if _, isErr := obj["error"]; !isErr {
+				result := make(map[string]string, len(obj))
+				for k, v := range obj {
+					if s, ok := v.(string); ok {
+						result[k] = s
+					}
+				}
+				return result, nil
+			}
+		}
+	}
+
+	// Fallback: client-side ExtractFields (only works with custom fields).
+	if opts.Fields != nil {
+		return p.ExtractFields(opts.Fields)
+	}
+
+	return nil, fmt.Errorf(
+		"Scrape without Fields needs server-side AI extraction, which this connection " +
+			"does not support. Connect through Spider (not a raw CDP endpoint), or set Fields " +
+			"with CSS selectors")
+}
+
 // --- Internals ---
 
 func (p *SpiderPage) getElementCenter(selector string) (float64, float64, error) {

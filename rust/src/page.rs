@@ -58,6 +58,34 @@ impl<'a> From<&'a str> for FieldSelector<'a> {
     }
 }
 
+/// Options for [`SpiderPage::scrape`].
+///
+/// `Default::default()` declares nothing, which is the zero-config mode: the
+/// AI infers the fields from the page itself.
+#[derive(Debug, Clone)]
+pub struct ScrapeOptions<'a> {
+    /// Your own CSS selectors. `None` lets the AI choose the fields.
+    pub fields: Option<&'a [(&'a str, FieldSelector<'a>)]>,
+    /// Target domain for built-in pattern lookup (e.g. `"amazon.com"`).
+    pub domain: Option<&'a str>,
+    /// Scraper slug for a specific built-in pattern (e.g. `"amazon-scraper"`).
+    pub slug: Option<&'a str>,
+    /// Allow AI to resolve fields CSS can't. Defaults to `true`; required for
+    /// the zero-config mode.
+    pub ai_fallback: bool,
+}
+
+impl Default for ScrapeOptions<'_> {
+    fn default() -> Self {
+        Self {
+            fields: None,
+            domain: None,
+            slug: None,
+            ai_fallback: true,
+        }
+    }
+}
+
 impl SpiderPage {
     // -----------------------------------------------------------------
     // Construction
@@ -1095,6 +1123,93 @@ impl SpiderPage {
         let parsed: std::collections::HashMap<String, Option<String>> =
             serde_json::from_str(raw).unwrap_or_default();
         Ok(parsed)
+    }
+
+    /// Scrape structured data from the current page.
+    ///
+    /// Server-side CSS extraction with an AI fallback for fields selectors
+    /// can't resolve. Four modes, selected by [`ScrapeOptions`]:
+    ///
+    /// 1. Nothing declared -- AI names the fields itself from the page
+    /// 2. `fields` -- your own CSS selectors
+    /// 3. `domain` (e.g. `"amazon.com"`) -- built-in patterns
+    /// 4. `slug` (e.g. `"amazon-scraper"`) -- a specific built-in pattern
+    ///
+    /// A `domain` or `slug` with no built-in pattern falls through to mode 1
+    /// rather than returning nothing.
+    ///
+    /// Falls back to client-side [`extract_fields`](Self::extract_fields) when
+    /// the server has no `Spider.scrape` (e.g. a raw CDP endpoint). Mode 1
+    /// needs the server, since the AI runs there.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // Zero config: AI picks the fields
+    /// let data = page.scrape(Default::default()).await?;
+    ///
+    /// // Built-in pattern
+    /// let data = page.scrape(ScrapeOptions {
+    ///     domain: Some("amazon.com"),
+    ///     ..Default::default()
+    /// }).await?;
+    /// ```
+    pub async fn scrape(
+        &self,
+        options: ScrapeOptions<'_>,
+    ) -> Result<std::collections::HashMap<String, Option<String>>> {
+        let mut params = serde_json::Map::new();
+        params.insert("aiFallback".into(), Value::Bool(options.ai_fallback));
+        if let Some(fields) = options.fields {
+            let map: serde_json::Map<String, Value> = fields
+                .iter()
+                .map(|(key, sel)| {
+                    let val = match sel {
+                        FieldSelector::Text(s) => Value::String((*s).to_string()),
+                        FieldSelector::Attr {
+                            selector,
+                            attribute,
+                        } => serde_json::json!({
+                            "selector": selector,
+                            "attribute": attribute,
+                        }),
+                    };
+                    ((*key).to_string(), val)
+                })
+                .collect();
+            params.insert("fields".into(), Value::Object(map));
+        }
+        if let Some(domain) = options.domain {
+            params.insert("domain".into(), Value::String(domain.to_string()));
+        }
+        if let Some(slug) = options.slug {
+            params.insert("slug".into(), Value::String(slug.to_string()));
+        }
+
+        // Try server-side Spider.scrape first (browser_server with extract crate)
+        if let Ok(resp) = self
+            .adapter()
+            .send_command("Spider.scrape", Value::Object(params))
+            .await
+        {
+            if resp.get("error").is_none() {
+                if let Ok(parsed) = serde_json::from_value(resp) {
+                    return Ok(parsed);
+                }
+            }
+        }
+
+        // Fallback: client-side extract_fields (only works with custom fields)
+        if let Some(fields) = options.fields {
+            return self.extract_fields(fields).await;
+        }
+
+        Err(crate::errors::SpiderError::Protocol(
+            "scrape() without `fields` needs server-side AI extraction, which this connection \
+             does not support. Connect through Spider (not a raw CDP endpoint), or pass \
+             `fields` with CSS selectors."
+                .to_string(),
+        ))
     }
 
     // =================================================================

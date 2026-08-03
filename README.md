@@ -109,6 +109,25 @@ func main() {
 | **Scale** | 100 concurrent sessions, zero cold start |
 | **Speed** | Pre-warmed browsers ready in milliseconds |
 
+## Structured Data, Nothing Declared
+
+`scrape()` takes no selectors, no schema, and no prompt. Spider reads the rendered page, works out what it is, and names the fields itself. The model runs server-side, so you bring no API key of your own.
+
+```typescript
+await browser.page.goto('https://www.rollingstone.com/music/music-news/');
+
+const data = await browser.page.scrape();
+// { headline: '...', author: '...', published_at: '...', summary: '...' }
+```
+
+Narrow it when you want determinism:
+
+```typescript
+await browser.page.scrape({ fields: { title: 'h1', price: '.price' } }); // your CSS
+await browser.page.scrape({ domain: 'amazon.com' });                     // built-in pattern
+await browser.page.scrape({ slug: 'amazon-scraper' });                   // specific pattern
+```
+
 ## AI Automation
 
 Control the browser with natural language. Works with OpenAI, Anthropic, OpenRouter, or any compatible endpoint.

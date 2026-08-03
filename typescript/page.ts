@@ -6,7 +6,12 @@ import { createProvider, type LLMConfig, type LLMProvider } from './ai/llm-provi
 
 /** Options for `page.scrape()`. Provide one of `fields`, `domain`, or `slug`. */
 export interface ScrapeOptions {
-  /** Custom CSS selectors for extraction. */
+  /**
+   * Custom CSS selectors for extraction.
+   *
+   * Omit this (along with `domain` and `slug`) to let AI infer the fields
+   * from the page itself.
+   */
   fields?: Record<string, string | { selector: string; attribute: string }>;
   /** Target domain for built-in pattern lookup (e.g. "amazon.com"). */
   domain?: string;
@@ -801,17 +806,27 @@ export class SpiderPage {
    * Scrape structured data from the current page.
    *
    * Uses server-side CSS extraction with automatic AI fallback for fields
-   * that selectors can't resolve. Supports three modes:
+   * that selectors can't resolve. Supports four modes:
    *
-   * 1. **Custom selectors** - pass `fields` with CSS selectors
-   * 2. **By domain** - pass `domain` (e.g. "amazon.com") to use built-in patterns
-   * 3. **By slug** - pass `slug` (e.g. "amazon-scraper") for a specific pattern
+   * 1. **Nothing declared** - call with no arguments and AI names the fields
+   *    itself, based on what the page is
+   * 2. **Custom selectors** - pass `fields` with CSS selectors
+   * 3. **By domain** - pass `domain` (e.g. "amazon.com") to use built-in patterns
+   * 4. **By slug** - pass `slug` (e.g. "amazon-scraper") for a specific pattern
+   *
+   * A `domain` or `slug` with no built-in pattern falls through to mode 1
+   * rather than returning nothing.
    *
    * Falls back to client-side extraction if the server doesn't support
    * `Spider.scrape` (e.g. direct CDP connection without browser_server).
+   * Mode 1 needs the server, since the AI runs there.
    *
    * @example
    * ```ts
+   * // Zero config: AI picks the fields
+   * const data = await page.scrape();
+   * // { headline: "...", author: "...", published_at: "...", body: "..." }
+   *
    * // Custom selectors
    * const data = await page.scrape({
    *   fields: {
@@ -828,7 +843,7 @@ export class SpiderPage {
    * const data = await page.scrape({ slug: "amazon-scraper" });
    * ```
    */
-  async scrape(options: ScrapeOptions): Promise<Record<string, string | null>> {
+  async scrape(options: ScrapeOptions = {}): Promise<Record<string, string | null>> {
     const params: Record<string, unknown> = {};
 
     if (options.fields) params.fields = options.fields;
@@ -851,7 +866,10 @@ export class SpiderPage {
       return this.extractFields(options.fields);
     }
 
-    return {};
+    throw new Error(
+      'scrape() without `fields` needs server-side AI extraction, which this connection does not support. ' +
+        'Connect through Spider (not a raw CDP endpoint), or pass `fields` with CSS selectors.',
+    );
   }
 
   // -------------------------------------------------------------------
